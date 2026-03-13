@@ -1,119 +1,127 @@
 #!/bin/bash
 # ============================================================================
-# Blum Panel / bertjj Malware Scanner
+# BLUM PANEL MALWARE SCANNER v3
 # ============================================================================
-# Scans a FiveM server's resources directory for all known variants.
-# Run as: ./scan.sh /path/to/resources/
+# Scans a FiveM server for all known Blum Panel / bertjj / miauss artifacts.
+# Run from the server root directory.
 # ============================================================================
 
-if [ -z "$1" ]; then
-    echo "Usage: ./scan.sh /path/to/resources/"
-    echo "Example: ./scan.sh /home/container/resources/"
-    exit 1
-fi
+RED='\033[0;31m'
+YEL='\033[1;33m'
+GRN='\033[0;32m'
+CYN='\033[0;36m'
+NC='\033[0m'
 
-RESOURCE_PATH="$1"
-TOTAL=0
-
+echo ""
 echo "============================================"
-echo " Blum Panel Malware Scanner"
-echo " Scanning: $RESOURCE_PATH"
+echo "  BLUM PANEL MALWARE SCANNER v3"
 echo "============================================"
 echo ""
 
-# Check 1: XOR backdoor files
-echo "[1/5] Scanning for XOR backdoor files..."
-while IFS= read -r file; do
-    if grep -q "eval(d.*,k.*)" "$file"; then
-        CREATED=$(stat -c "%w" "$file" 2>/dev/null || echo "unknown")
-        MODIFIED=$(stat -c "%y" "$file" 2>/dev/null || echo "unknown")
-        SIZE=$(wc -c < "$file")
-        KEYS=$(grep -oP 'const k\w+=\K\d+' "$file" | tr '\n' ',' | sed 's/,$//')
-        BLOCKS=$(grep -c 'String.fromCharCode' "$file")
-        echo "  ████ 100% MALWARE: $file"
-        echo "      Size: $SIZE bytes | XOR keys: $KEYS | Blocks: $BLOCKS"
-        echo "      Created:  $CREATED"
-        echo "      Modified: $MODIFIED"
-        TOTAL=$((TOTAL + 1))
-    fi
-done < <(find "$RESOURCE_PATH" -name "*.js" -not -path "*/node_modules/*" -not -path "*/dropper_trap/*" \
-  -exec grep -l "String.fromCharCode(a\[i\]\^k)" {} \; 2>/dev/null)
-echo ""
+FOUND=0
+SCAN_DIR="${1:-.}"
 
-# Check 2: Heavy obfuscation (Blum Panel core)
-echo "[2/5] Scanning for Blum Panel core files..."
-for pattern in 'Function("a",' 'Function("tqVTPU",'; do
-    while IFS= read -r file; do
-        echo "  ████ BLUM PANEL CORE: $file ($(wc -c < "$file") bytes)"
-        TOTAL=$((TOTAL + 1))
-    done < <(grep -rl "$pattern" "$RESOURCE_PATH" --include="*.js" 2>/dev/null)
-done
-echo ""
-
-# Check 3: Tampered txAdmin files
-echo "[3/5] Scanning for tampered system files..."
-while IFS= read -r file; do
-    echo "  ████ TAMPERED (resource hiding): $file"
-    TOTAL=$((TOTAL + 1))
-done < <(grep -rl "RESOURCE_EXCLUDE\|isExcludedResource" "$RESOURCE_PATH" --include="*.lua" 2>/dev/null)
-
-while IFS= read -r file; do
-    echo "  ████ TAMPERED (RCE backdoor): $file"
-    TOTAL=$((TOTAL + 1))
-done < <(grep -rl "onServerResourceFail" "$RESOURCE_PATH" --include="*.lua" 2>/dev/null | grep -v "dropper_trap")
-echo ""
-
-# Check 4: Attacker fingerprints
-echo "[4/5] Scanning for attacker fingerprints..."
-while IFS= read -r file; do
-    MATCHES=$(grep -oP "bertjj|bertJJ|miauss|miausas|fivems\.lt|VB8mdVjrzd" "$file" | sort -u | tr '\n' ', ' | sed 's/,$//')
-    echo "  ████ FINGERPRINT: $file"
-    echo "      Matches: $MATCHES"
-    TOTAL=$((TOTAL + 1))
-done < <(grep -rl "bertjj\|bertJJ\|miauss\|miausas\|fivems\.lt\|VB8mdVjrzd" "$RESOURCE_PATH" 2>/dev/null | grep -v "dropper_trap" | grep -v "node_modules")
-echo ""
-
-# Check 5: Suspicious fxmanifest entries
-echo "[5/5] Scanning for suspicious fxmanifest entries..."
-echo "  (Map/vehicle resources should NOT have .js server scripts)"
-while IFS= read -r manifest; do
-    if grep -q "server_script\|shared_script" "$manifest" 2>/dev/null; then
-        JS_SCRIPTS=$(grep -P "server_script|shared_script" "$manifest" | grep -oP "'[^']*\.js'" | tr '\n' ', ' | sed 's/,$//')
-        if [ ! -z "$JS_SCRIPTS" ]; then
-            echo "  ⚠ SUSPICIOUS: $manifest"
-            echo "      Map resource loading JS: $JS_SCRIPTS"
-        fi
-    fi
-done < <(find "$RESOURCE_PATH" -name "fxmanifest.lua" -exec grep -l 'this_is_a_map' {} \; 2>/dev/null)
-echo ""
-
-# Check infected yarn/webpack
-echo "[BONUS] Checking system builder files..."
-for builder in "yarn/yarn_builder.js" "webpack/webpack_builder.js"; do
-    FOUND=$(find "$RESOURCE_PATH" -path "*$builder" 2>/dev/null)
-    if [ ! -z "$FOUND" ]; then
-        SIZE=$(wc -c < "$FOUND")
-        if [ "$SIZE" -gt 10000 ]; then
-            echo "  ████ INFECTED: $FOUND ($SIZE bytes — should be ~6KB)"
-            TOTAL=$((TOTAL + 1))
-        else
-            echo "  ✓ CLEAN: $FOUND ($SIZE bytes)"
-        fi
-    fi
-done
-echo ""
-
-echo "============================================"
-echo " RESULTS: $TOTAL infected files found"
-echo "============================================"
-if [ "$TOTAL" -gt 0 ]; then
-    echo ""
-    echo " Your server is infected with the Blum Panel backdoor."
-    echo " See README.md for remediation steps."
+# ---------- 1. XOR DROPPER PATTERN ----------
+echo -e "${CYN}[1/8] Scanning for XOR dropper pattern...${NC}"
+hits=$(grep -rn "String.fromCharCode(a\[i\]\^k)" --include="*.js" "$SCAN_DIR" 2>/dev/null)
+if [ -n "$hits" ]; then
+    echo -e "${RED}  FOUND — XOR dropper files:${NC}"
+    echo "$hits" | while read line; do echo -e "  ${RED}$line${NC}"; done
+    FOUND=$((FOUND + $(echo "$hits" | wc -l)))
 else
-    echo ""
-    echo " No infections detected. Your server appears clean."
-    echo " Consider running this scan weekly and after"
-    echo " installing any new resources."
+    echo -e "  ${GRN}Clean${NC}"
 fi
+
+# ---------- 2. ATTACKER STRINGS ----------
+echo -e "${CYN}[2/8] Scanning for attacker identifiers...${NC}"
+hits=$(grep -rn "bertjj\|bertJJ\|miauss\|miausas\|fivems\.lt\|VB8mdVjrzd\|blum-panel\|warden-panel" --include="*.js" --include="*.lua" --include="*.cfg" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|SCANNER\|scan.sh\|block_c2\|README\|\.md$")
+if [ -n "$hits" ]; then
+    echo -e "${RED}  FOUND — Attacker strings:${NC}"
+    echo "$hits" | head -20 | while read line; do echo -e "  ${RED}$line${NC}"; done
+    FOUND=$((FOUND + $(echo "$hits" | wc -l)))
+else
+    echo -e "  ${GRN}Clean${NC}"
+fi
+
+# ---------- 3. TXADMIN TAMPERING ----------
+echo -e "${CYN}[3/8] Scanning for txAdmin tampering...${NC}"
+hits=$(grep -rn "RESOURCE_EXCLUDE\|isExcludedResource\|onServerResourceFail\|helpEmptyCode\|JohnsUrUncle\|txadmin:js_create" --include="*.lua" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|scan.sh\|README")
+if [ -n "$hits" ]; then
+    echo -e "${RED}  FOUND — txAdmin backdoor indicators:${NC}"
+    echo "$hits" | while read line; do echo -e "  ${RED}$line${NC}"; done
+    FOUND=$((FOUND + $(echo "$hits" | wc -l)))
+else
+    echo -e "  ${GRN}Clean${NC}"
+fi
+
+# ---------- 4. KNOWN DROPPER FILENAMES IN SUSPICIOUS LOCATIONS ----------
+echo -e "${CYN}[4/8] Scanning for dropper files in suspicious paths...${NC}"
+for name in babel_config.js jest_mock.js mock_data.js webpack_bundle.js env_backup.js cache_old.js build_cache.js vite_temp.js eslint_rc.js jest_setup.js test_utils.js utils_lib.js helper_functions.js sync_worker.js queue_handler.js session_store.js hook_system.js patch_update.js; do
+    finds=$(find "$SCAN_DIR" -name "$name" -path "*/server/*" -o -name "$name" -path "*/modules/*" -o -name "$name" -path "*/node_modules/.cache/*" -o -name "$name" -path "*/middleware/*" -o -name "$name" -path "*/dist/*" 2>/dev/null)
+    if [ -n "$finds" ]; then
+        echo "$finds" | while read f; do
+            if grep -q "fromCharCode\|eval(" "$f" 2>/dev/null; then
+                echo -e "  ${RED}INFECTED: $f${NC}"
+                FOUND=$((FOUND + 1))
+            else
+                echo -e "  ${YEL}SUSPICIOUS: $f (check manually)${NC}"
+            fi
+        done
+    fi
+done
+echo -e "  ${GRN}Done${NC}"
+
+# ---------- 5. C2 DOMAIN CONNECTIONS ----------
+echo -e "${CYN}[5/8] Checking for C2 domains in code...${NC}"
+C2_DOMAINS="fivems\.lt\|0xchitado\.com\|giithub\.net\|fivemgtax\.com\|warden-panel\.me\|bhlool\.com\|flowleakz\.org\|z1lly\.org\|l00x\.org\|monloox\.com\|noanimeisgay\.com\|2ns3\.net\|5mscripts\.net\|2312321321321213\.com"
+hits=$(grep -rn "$C2_DOMAINS" --include="*.js" --include="*.lua" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|scan.sh\|block_c2\|README\|\.md$\|\.txt$")
+if [ -n "$hits" ]; then
+    echo -e "${RED}  FOUND — C2 domain references:${NC}"
+    echo "$hits" | head -10 | while read line; do echo -e "  ${RED}$line${NC}"; done
+    FOUND=$((FOUND + $(echo "$hits" | wc -l)))
+else
+    echo -e "  ${GRN}Clean${NC}"
+fi
+
+# ---------- 6. LZSTRING / OBFUSCATION MARKERS ----------
+echo -e "${CYN}[6/8] Scanning for obfuscation markers...${NC}"
+hits=$(grep -rn "decompressFromUTF16\|\\\\u15E1\|aga\[0x\|UARZT6\[" --include="*.js" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|scan.sh\|README\|deobfuscated")
+if [ -n "$hits" ]; then
+    echo -e "${RED}  FOUND — Obfuscation markers:${NC}"
+    echo "$hits" | head -5 | while read line; do echo -e "  ${RED}$line${NC}"; done
+    FOUND=$((FOUND + $(echo "$hits" | wc -l)))
+else
+    echo -e "  ${GRN}Clean${NC}"
+fi
+
+# ---------- 7. FXMANIFEST INJECTION ----------
+echo -e "${CYN}[7/8] Checking fxmanifest.lua files for suspicious entries...${NC}"
+find "$SCAN_DIR" -name "fxmanifest.lua" 2>/dev/null | while read manifest; do
+    suspicious=$(grep -n "node_modules/\.\|\.cache/\|middleware/\|dist/.*\.js\|babel_config\|jest_mock\|mock_data\|webpack_bundle\|env_backup\|cache_old\|build_cache\|vite_temp" "$manifest" 2>/dev/null)
+    if [ -n "$suspicious" ]; then
+        echo -e "  ${RED}SUSPICIOUS ENTRY in $manifest:${NC}"
+        echo "$suspicious" | while read line; do echo -e "    ${RED}$line${NC}"; done
+        FOUND=$((FOUND + 1))
+    fi
+done
+echo -e "  ${GRN}Done${NC}"
+
+# ---------- 8. SERVER.CFG CHECK ----------
+echo -e "${CYN}[8/8] Checking /etc/hosts for C2 blocks...${NC}"
+if grep -q "fivems.lt" /etc/hosts 2>/dev/null; then
+    echo -e "  ${GRN}fivems.lt is blocked in /etc/hosts${NC}"
+else
+    echo -e "  ${YEL}WARNING: fivems.lt is NOT blocked in /etc/hosts${NC}"
+fi
+
+echo ""
+echo "============================================"
+if [ $FOUND -gt 0 ]; then
+    echo -e "  ${RED}SCAN COMPLETE: $FOUND indicator(s) found${NC}"
+    echo -e "  ${RED}Server may be infected with Blum Panel${NC}"
+else
+    echo -e "  ${GRN}SCAN COMPLETE: No indicators found${NC}"
+    echo -e "  ${GRN}Server appears clean${NC}"
+fi
+echo "============================================"
 echo ""

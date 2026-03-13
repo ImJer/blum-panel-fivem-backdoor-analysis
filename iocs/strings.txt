@@ -1,21 +1,48 @@
-# Blum Panel / bertjj Detection Strings
-# Grep for any of these across your server files
+# Detection strings — grep for these in .js and .lua files
+# XOR dropper signature
+String.fromCharCode(a[i]^k)
+# Attacker handles
 bertjj
 bertJJ
 bertjjgg
-bertJJgg
 bertjjcfxre
-bertJJcfxre
 miauss
 miausas
+# C2 domains
 fivems.lt
-warden-panel
-fivemgtax
-giithub.net
-screenCaptureEvent
-privateChatMap
+blum-panel.me
+warden-panel.me
+# Discord
 VB8mdVjrzd
-onServerResourceFail
+# GlobalState mutex keys
+GlobalState.miauss
+GlobalState.ggWP
+# txAdmin tampering
 RESOURCE_EXCLUDE
 isExcludedResource
-String.fromCharCode(a[i]^k)
+onServerResourceFail
+helpEmptyCode
+JohnsUrUncle
+txadmin:js_create
+X-TxAdmin-Token
+X-TxAdmin-Identifiers
+# Obfuscation markers
+decompressFromUTF16
+\u15E1
+UARZT6
+# Dropper filenames (in suspicious locations)
+babel_config.js
+jest_mock.js
+mock_data.js
+webpack_bundle.js
+env_backup.js
+cache_old.js
+build_cache.js
+vite_temp.js
+eslint_rc.js
+jest_setup.js
+sync_worker.js
+hook_system.js
+patch_update.js
+# Dropper template marker
+// if you found this contact us to fix problems

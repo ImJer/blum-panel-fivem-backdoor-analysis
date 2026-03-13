@@ -1,5 +1,6 @@
-# Blum Panel / bertjj C2 Domain Block
-# Add to /etc/hosts on your host machine
+# Blum Panel C2 domain block — add to /etc/hosts
+0.0.0.0 fivems.lt
+0.0.0.0 www.fivems.lt
 0.0.0.0 0xchitado.com
 0.0.0.0 2312321321321213.com
 0.0.0.0 2ns3.net
@@ -23,4 +24,6 @@
 0.0.0.0 2nit32.com
 0.0.0.0 useer.it.com
 0.0.0.0 wsichkidolu.com
-0.0.0.0 fivems.lt
+0.0.0.0 blum-panel.me
+0.0.0.0 www.blum-panel.me
+0.0.0.0 www.warden-panel.me

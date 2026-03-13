@@ -1,7 +1,13 @@
 // ============================================================================
-// DROPPER TRAP v2 — JavaScript Hooks (BLOCKS + LOGS)
+// DROPPER TRAP v3 — JavaScript Hooks (OPTIMIZED)
 // ============================================================================
-// BLOCKS malicious writes. Clean writes pass through normally.
+// Changes from v2:
+//   - File scan every 120s instead of 15s, uses async readFile not readFileSync
+//   - Mutex check every 30s instead of 10s
+//   - isSuspicious only scans first 2KB of data (patterns always in header)
+//   - No toString() on large Buffers
+//   - Added ggWP replicator mutex
+//   - Removed excessive console.log spam (single-line alerts)
 // ============================================================================
 
 const fs = require('fs');
@@ -12,130 +18,122 @@ const orig = {
     writeFileSync: fs.writeFileSync,
     appendFile: fs.appendFile,
     appendFileSync: fs.appendFileSync,
-    createWriteStream: fs.createWriteStream,
+    readFile: fs.readFile,  // keep clean ref for our own scans
 };
 
-const origSRF = global.SaveResourceFile;
+const origSRF = typeof SaveResourceFile === 'function' ? SaveResourceFile : null;
 
 const SUSPICIOUS = [
     'String.fromCharCode', 'fromCharCode', 'bertjj', 'bertJJ',
     'miauss', 'miausas', 'fivems.lt', 'RESOURCE_EXCLUDE',
     'isExcludedResource', 'onServerResourceFail', 'decompressFromUTF16',
-    '\u15E1', 'eval(d', '^k);', 'base91',
+    '\u15E1', 'blum-panel', 'ggWP', 'helpEmptyCode', 'JohnsUrUncle', 'txadmin:js_create',
 ];
 
-const TARGETS = [
+const TARGETS = new Set([
     'yarn_builder.js', 'webpack_builder.js',
     'sv_main.lua', 'sv_resources.lua', 'main.js', 'script.js',
-];
+    'babel_config.js', 'jest_mock.js', 'mock_data.js', 'commands.js', 'cl_playerlist.lua',
+]);
 
 let blockedCount = 0;
 
 function isSuspicious(data) {
     if (!data) return null;
-    const str = typeof data === 'string' ? data : data.toString();
+    // Only check first 2KB — malware signatures are always near the top
+    let str;
+    if (typeof data === 'string') {
+        str = data.length > 2048 ? data.substring(0, 2048) : data;
+    } else if (Buffer.isBuffer(data)) {
+        str = data.toString('utf8', 0, Math.min(data.length, 2048));
+    } else {
+        return null;
+    }
     for (const p of SUSPICIOUS) { if (str.includes(p)) return p; }
     return null;
 }
 
 function isTarget(fp) {
     if (!fp) return false;
-    const name = path.basename(fp.toString());
-    return TARGETS.some(t => name === t);
+    return TARGETS.has(path.basename(fp.toString()));
 }
 
 function getRes() {
-    try { return GetInvokingResource() || GetCurrentResourceName() || 'unknown'; }
-    catch(e) { return 'unknown'; }
-}
-
-function logBlock(method, filepath, pattern, data) {
-    blockedCount++;
-    console.log('^1======================================================================^0');
-    console.log('^1[TRAP-JS] ████ DROPPER WRITE BLOCKED ████^0');
-    console.log(`^1[TRAP-JS] Method:    ${method}^0`);
-    console.log(`^1[TRAP-JS] File:      ${filepath}^0`);
-    console.log(`^1[TRAP-JS] Resource:  ${getRes()}^0`);
-    console.log(`^1[TRAP-JS] Pattern:   ${pattern}^0`);
-    if (data) console.log(`^1[TRAP-JS] Preview:   ${(typeof data === 'string' ? data : data.toString()).substring(0, 150)}^0`);
-    console.log(`^1[TRAP-JS] Stack:^0`);
-    console.log(new Error().stack.split('\n').slice(2, 6).join('\n'));
-    console.log(`^1[TRAP-JS] Total blocks: ${blockedCount}^0`);
-    console.log('^1======================================================================^0');
+    try { return GetInvokingResource() || GetCurrentResourceName() || '?'; }
+    catch(e) { return '?'; }
 }
 
 
 // ============================================================================
-// HOOK: fs.writeFile — BLOCK if malicious
+// HOOK: fs.writeFile / writeFileSync — only check target files
 // ============================================================================
 fs.writeFile = function(filepath, data, ...args) {
-    const match = isSuspicious(data);
-    const target = isTarget(filepath);
-
-    if (match && target) {
-        logBlock('fs.writeFile', filepath, match, data);
-        // Call the callback with no error so the dropper thinks it succeeded
-        const cb = args.find(a => typeof a === 'function');
-        if (cb) cb(null);
-        return;
-    }
-    if (match || target) {
-        console.log(`^3[TRAP-JS] WARNING: fs.writeFile → ${filepath} by "${getRes()}" (${match || 'known target'})^0`);
+    if (isTarget(filepath)) {
+        const match = isSuspicious(data);
+        if (match) {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED writeFile: ${filepath} | ${match} | ${getRes()}^0`);
+            const cb = args.find(a => typeof a === 'function');
+            if (cb) cb(null);
+            return;
+        }
     }
     return orig.writeFile.call(fs, filepath, data, ...args);
 };
 
 fs.writeFileSync = function(filepath, data, ...args) {
-    const match = isSuspicious(data);
-    const target = isTarget(filepath);
-
-    if (match && target) {
-        logBlock('fs.writeFileSync', filepath, match, data);
-        return; // Silently block — dropper thinks it succeeded
+    if (isTarget(filepath)) {
+        const match = isSuspicious(data);
+        if (match) {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED writeFileSync: ${filepath} | ${match} | ${getRes()}^0`);
+            return;
+        }
     }
     return orig.writeFileSync.call(fs, filepath, data, ...args);
 };
 
 
 // ============================================================================
-// HOOK: fs.appendFile — BLOCK if malicious
+// HOOK: fs.appendFile / appendFileSync — only check target files
 // ============================================================================
 fs.appendFile = function(filepath, data, ...args) {
-    const match = isSuspicious(data);
-    const target = isTarget(filepath);
-
-    if (match && target) {
-        logBlock('fs.appendFile', filepath, match, data);
-        const cb = args.find(a => typeof a === 'function');
-        if (cb) cb(null);
-        return;
+    if (isTarget(filepath)) {
+        const match = isSuspicious(data);
+        if (match) {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED appendFile: ${filepath} | ${match} | ${getRes()}^0`);
+            const cb = args.find(a => typeof a === 'function');
+            if (cb) cb(null);
+            return;
+        }
     }
     return orig.appendFile.call(fs, filepath, data, ...args);
 };
 
 fs.appendFileSync = function(filepath, data, ...args) {
-    const match = isSuspicious(data);
-    const target = isTarget(filepath);
-
-    if (match && target) {
-        logBlock('fs.appendFileSync', filepath, match, data);
-        return;
+    if (isTarget(filepath)) {
+        const match = isSuspicious(data);
+        if (match) {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED appendFileSync: ${filepath} | ${match} | ${getRes()}^0`);
+            return;
+        }
     }
     return orig.appendFileSync.call(fs, filepath, data, ...args);
 };
 
 
 // ============================================================================
-// HOOK: SaveResourceFile — BLOCK if malicious
+// HOOK: SaveResourceFile — BLOCK backdoor content
 // ============================================================================
-if (typeof SaveResourceFile === 'function') {
+if (origSRF) {
     global.SaveResourceFile = function(resourceName, fileName, data, dataLength) {
         const match = isSuspicious(data);
-        const target = isTarget(fileName);
-
         if (match) {
-            logBlock('SaveResourceFile', `${resourceName}/${fileName}`, match, data);
-            return false; // Block
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED SaveResourceFile: ${resourceName}/${fileName} | ${match} | ${getRes()}^0`);
+            return false;
         }
         return origSRF(resourceName, fileName, data, dataLength);
     };
@@ -143,64 +141,52 @@ if (typeof SaveResourceFile === 'function') {
 
 
 // ============================================================================
-// HOOK: HTTPS — Log and BLOCK connections to known C2 domains
+// HOOK: HTTPS — Block connections to known C2 domains
 // ============================================================================
 try {
     const https = require('https');
     const origGet = https.get;
     const origReq = https.request;
 
-    const C2 = ['fivems.lt','0xchitado.com','giithub.net','fivemgtax.com',
+    const C2 = new Set([
+        'fivems.lt','0xchitado.com','giithub.net','fivemgtax.com',
         'warden-panel.me','bhlool.com','flowleakz.org','z1lly.org',
         'l00x.org','monloox.com','ryenz.net','spacedev.fr',
         'noanimeisgay.com','trezz.org','2ns3.net','5mscripts.net',
         'kutingplays.com','bybonvieux.com','iwantaticket.org','jking.lt',
-        '2312321321321213.com','2nit32.com','useer.it.com','wsichkidolu.com'];
+        '2312321321321213.com','2nit32.com','useer.it.com','wsichkidolu.com',
+    ]);
 
-    function checkC2(url) {
-        const s = typeof url === 'string' ? url : (url.hostname || url.host || '');
-        for (const d of C2) {
-            if (s.includes(d)) {
-                blockedCount++;
-                console.log('^1[TRAP-JS] ████ C2 CONNECTION BLOCKED ████^0');
-                console.log(`^1[TRAP-JS] URL:      ${s}^0`);
-                console.log(`^1[TRAP-JS] Domain:   ${d}^0`);
-                console.log(`^1[TRAP-JS] Resource: ${getRes()}^0`);
-                console.log(new Error().stack.split('\n').slice(2, 5).join('\n'));
-                return true;
-            }
-        }
+    function isC2(url) {
+        const s = typeof url === 'string' ? url : (url && (url.hostname || url.host || ''));
+        if (!s) return false;
+        for (const d of C2) { if (s.includes(d)) return d; }
         return false;
     }
 
+    // Shared fake request object — reuse instead of creating EventEmitters
+    function makeFake() {
+        const noop = () => fake;
+        const fake = { on: noop, end: noop, destroy: noop, write: noop, setTimeout: noop, once: noop, addListener: noop };
+        return fake;
+    }
+
     https.get = function(url, ...args) {
-        if (checkC2(url)) {
-            // Return a fake request that immediately errors
-            const EventEmitter = require('events');
-            const fake = new EventEmitter();
-            fake.end = () => {};
-            fake.destroy = () => {};
-            fake.setTimeout = () => {};
-            fake.on = fake.addListener;
-            setTimeout(() => fake.emit('error', new Error('blocked by dropper_trap')), 0);
-            const cb = args.find(a => typeof a === 'function');
-            // Don't call callback — let it error silently
-            return fake;
+        const domain = isC2(url);
+        if (domain) {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED C2: ${domain} | ${getRes()}^0`);
+            return makeFake();
         }
         return origGet.call(https, url, ...args);
     };
 
     https.request = function(url, ...args) {
-        if (checkC2(url)) {
-            const EventEmitter = require('events');
-            const fake = new EventEmitter();
-            fake.end = () => {};
-            fake.destroy = () => {};
-            fake.write = () => {};
-            fake.setTimeout = () => {};
-            fake.on = fake.addListener;
-            setTimeout(() => fake.emit('error', new Error('blocked by dropper_trap')), 0);
-            return fake;
+        const domain = isC2(url);
+        if (domain) {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED C2: ${domain} | ${getRes()}^0`);
+            return makeFake();
         }
         return origReq.call(https, url, ...args);
     };
@@ -208,67 +194,74 @@ try {
 
 
 // ============================================================================
-// HOOK: eval — BLOCK if suspicious content
+// HOOK: eval — BLOCK if suspicious
 // ============================================================================
 const origEval = global.eval;
 global.eval = function(code) {
-    const match = isSuspicious(code);
-    if (match) {
-        blockedCount++;
-        console.log('^1[TRAP-JS] ████ MALICIOUS EVAL BLOCKED ████^0');
-        console.log(`^1[TRAP-JS] Resource: ${getRes()}^0`);
-        console.log(`^1[TRAP-JS] Pattern:  ${match}^0`);
-        console.log(`^1[TRAP-JS] Code:     ${(typeof code === 'string' ? code : '').substring(0, 150)}^0`);
-        return undefined; // Block execution
+    if (typeof code === 'string') {
+        const match = isSuspicious(code);
+        if (match) {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED eval | ${match} | ${getRes()}^0`);
+            return undefined;
+        }
     }
     return origEval(code);
 };
 
 
 // ============================================================================
-// PERIODIC: Scan for infections + check GlobalState
+// PERIODIC: Mutex check — every 30s
 // ============================================================================
 setInterval(() => {
     try {
-        const gs = global.GlobalState || (typeof GlobalState !== 'undefined' ? GlobalState : null);
+        const gs = typeof GlobalState !== 'undefined' ? GlobalState : null;
         if (!gs) return;
-        for (const name of ['miauss', 'miausas']) {
+        for (const name of ['miauss', 'miausas', 'ggWP']) {
             const val = gs[name];
-            if (val !== undefined && val !== null) {
-                console.log(`^1[TRAP-JS] ████ MUTEX FOUND: GlobalState.${name} = "${val}" — CLEARING ████^0`);
+            if (val != null) {
+                console.log(`^1[TRAP-JS] MUTEX: GlobalState.${name} = "${val}" — CLEARING^0`);
                 gs[name] = null;
             }
         }
     } catch(e) {}
-}, 10000);
+}, 30000);
 
+
+// ============================================================================
+// PERIODIC: File scan — every 120s, ASYNC reads (non-blocking)
+// ============================================================================
 setInterval(() => {
     try {
         const numRes = GetNumResources();
+        let found = 0;
+        let pending = 0;
+
         for (let i = 0; i < numRes; i++) {
             const resName = GetResourceByFindIndex(i);
-            if (!resName) continue;
-            const resPath = GetResourcePath(resName);
+            if (!resName || resName === 'dropper_trap') continue;
+
+            let resPath;
+            try { resPath = GetResourcePath(resName); } catch(e) { continue; }
             if (!resPath) continue;
+
             for (const target of TARGETS) {
-                try {
-                    const content = require('fs').readFileSync(path.join(resPath, target), 'utf-8');
-                    const match = isSuspicious(content);
-                    if (match) {
-                        console.log(`^1[TRAP-JS] ████ INFECTED: ${resName}/${target} (${match}) ████^0`);
+                pending++;
+                // ASYNC read — does NOT block server thread
+                orig.readFile.call(fs, path.join(resPath, target), 'utf8', (err, content) => {
+                    pending--;
+                    if (!err && content) {
+                        const match = isSuspicious(content);
+                        if (match) {
+                            found++;
+                            console.log(`^1[TRAP-JS] INFECTED: ${resName}/${target} | ${match}^0`);
+                        }
                     }
-                } catch(e) {} // file doesn't exist
+                });
             }
         }
     } catch(e) {}
-}, 15000);
+}, 120000);
 
 
-console.log('^2[TRAP-JS] ============================================^0');
-console.log('^2[TRAP-JS] Dropper trap v2 ACTIVE — BLOCKING MODE^0');
-console.log('^2[TRAP-JS] File writes: BLOCKED if malicious content^0');
-console.log('^2[TRAP-JS] C2 connections: BLOCKED (all known domains)^0');
-console.log('^2[TRAP-JS] Malicious eval: BLOCKED^0');
-console.log('^2[TRAP-JS] GlobalState mutex: auto-cleared every 10s^0');
-console.log('^2[TRAP-JS] File scan: every 15s for known patterns^0');
-console.log('^2[TRAP-JS] ============================================^0');
+console.log('^2[TRAP-JS] v3 ACTIVE | hooks: fs.write, SaveResourceFile, https, eval | scan: 120s async^0');

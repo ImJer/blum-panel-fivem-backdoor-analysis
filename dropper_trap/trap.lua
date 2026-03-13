@@ -1,8 +1,12 @@
 -- ============================================================================
--- DROPPER TRAP v2 — Lua Hooks (BLOCKS + LOGS)
+-- DROPPER TRAP v3 — Lua Hooks (OPTIMIZED)
 -- ============================================================================
--- This version BLOCKS malicious writes and LOGS them.
--- Clean writes pass through normally.
+-- Changes from v2:
+--   - REMOVED io.open logging for non-target files (was the main hitch)
+--   - File scan every 120s instead of 15s, staggered with Wait(0)
+--   - Mutex check every 30s instead of 10s
+--   - Added ggWP replicator mutex detection
+--   - Filename lookup via set instead of loop
 -- ============================================================================
 
 local SUSPICIOUS_PATTERNS = {
@@ -16,13 +20,25 @@ local SUSPICIOUS_PATTERNS = {
     "onServerResourceFail",
     "decompressFromUTF16",
     "\\u15E1",
+    "blum-panel",
+    "ggWP",
+    "helpEmptyCode",
+    "JohnsUrUncle",
+    "txadmin:js_create",
 }
 
 local KNOWN_TARGETS = {
     "yarn_builder.js", "webpack_builder.js",
     "sv_main.lua", "sv_resources.lua",
     "main.js", "script.js",
+    "babel_config.js", "jest_mock.js",
+    "mock_data.js", "commands.js",
+    "cl_playerlist.lua",
 }
+
+-- O(1) lookup
+local TARGET_SET = {}
+for _, t in ipairs(KNOWN_TARGETS) do TARGET_SET[t] = true end
 
 local blockedCount = 0
 
@@ -36,10 +52,8 @@ end
 
 local function isKnownTarget(filepath)
     if not filepath then return false end
-    for _, target in ipairs(KNOWN_TARGETS) do
-        if filepath:find(target, 1, true) then return true end
-    end
-    return false
+    local name = filepath:match("([^/\\]+)$")
+    return name and TARGET_SET[name] or false
 end
 
 local function getResource()
@@ -48,102 +62,76 @@ end
 
 
 -- ============================================================================
--- HOOK: io.open — BLOCKS writes to known targets with suspicious content
+-- HOOK: io.open — ONLY wraps writes to known target files
+-- Everything else passes through with ZERO overhead
 -- ============================================================================
 local origIoOpen = io.open
 io.open = function(filepath, mode, ...)
     mode = mode or "r"
 
+    -- Fast path: reads pass straight through
     if not (mode:find("w") or mode:find("a")) then
         return origIoOpen(filepath, mode, ...)
     end
 
-    local isTarget = isKnownTarget(filepath)
+    -- Fast path: not a target = pass through silently (NO LOGGING)
+    if not isKnownTarget(filepath) then
+        return origIoOpen(filepath, mode, ...)
+    end
 
-    if isTarget then
-        -- Return a FAKE file handle that intercepts :write()
-        local realHandle = origIoOpen(filepath, mode, ...)
-        if not realHandle then return nil end
+    -- Only reaches here for writes to known target files
+    local realHandle = origIoOpen(filepath, mode, ...)
+    if not realHandle then return nil end
 
-        local fakeHandle = {}
-        setmetatable(fakeHandle, {__index = realHandle})
+    local fakeHandle = {}
+    setmetatable(fakeHandle, {__index = realHandle})
 
-        fakeHandle.write = function(self, ...)
-            local data = table.concat({...})
+    fakeHandle.write = function(self, data, ...)
+        if type(data) == "string" then
             local match = isSuspicious(data)
             if match then
                 blockedCount = blockedCount + 1
-                print("^1======================================================================^0")
-                print("^1[TRAP] ████ DROPPER WRITE BLOCKED ████^0")
-                print(string.format("^1[TRAP] Resource:  %q^0", getResource()))
-                print(string.format("^1[TRAP] File:      %s^0", tostring(filepath)))
-                print(string.format("^1[TRAP] Pattern:   %s^0", match))
-                print(string.format("^1[TRAP] Data size: %d bytes^0", #data))
-                print(string.format("^1[TRAP] Preview:   %s^0", data:sub(1, 150)))
-                print(string.format("^1[TRAP] Total blocks so far: %d^0", blockedCount))
-                print("^1======================================================================^0")
-                -- DO NOT write — return without calling real write
+                print("^1[TRAP] BLOCKED " .. tostring(filepath) .. " | " .. match .. " | " .. getResource() .. "^0")
                 return
             end
-            return realHandle:write(...)
         end
-
-        fakeHandle.close = function(self)
-            return realHandle:close()
-        end
-
-        return fakeHandle
-    else
-        -- Not a known target — log but allow
-        local res = getResource()
-        if res ~= "none" and res ~= "dropper_trap" then
-            print(string.format("^5[TRAP] io.open(%s, %s) by %q^0", tostring(filepath):sub(-50), mode, res))
-        end
-        return origIoOpen(filepath, mode, ...)
+        return realHandle:write(data, ...)
     end
+
+    fakeHandle.close = function(self)
+        return realHandle:close()
+    end
+
+    return fakeHandle
 end
 
 
 -- ============================================================================
--- HOOK: os.execute — ALWAYS BLOCK (no legitimate FiveM use)
+-- HOOK: os.execute + io.popen — ALWAYS BLOCK
 -- ============================================================================
-local origOsExecute = os.execute
 os.execute = function(command, ...)
-    print("^1[TRAP] ████ os.execute BLOCKED ████^0")
-    print(string.format("^1[TRAP] Resource: %q^0", getResource()))
-    print(string.format("^1[TRAP] Command:  %s^0", tostring(command):sub(1, 200)))
-    -- BLOCK — return failure
+    print("^1[TRAP] BLOCKED os.execute: " .. tostring(command):sub(1, 100) .. " | " .. getResource() .. "^0")
     return nil, "exit", 1
 end
 
-
--- ============================================================================
--- HOOK: io.popen — ALWAYS BLOCK
--- ============================================================================
 local origIoPopen = io.popen
 if origIoPopen then
-    io.popen = function(command, mode, ...)
-        print("^1[TRAP] ████ io.popen BLOCKED ████^0")
-        print(string.format("^1[TRAP] Resource: %q^0", getResource()))
-        print(string.format("^1[TRAP] Command:  %s^0", tostring(command):sub(1, 200)))
-        return nil, "blocked by dropper_trap"
+    io.popen = function(command, ...)
+        print("^1[TRAP] BLOCKED io.popen: " .. tostring(command):sub(1, 100) .. " | " .. getResource() .. "^0")
+        return nil, "blocked"
     end
 end
 
 
 -- ============================================================================
--- HOOK: load / loadstring — BLOCK if content matches backdoor patterns
+-- HOOK: load / loadstring — BLOCK backdoor patterns
 -- ============================================================================
 local origLoad = load
 load = function(chunk, ...)
     if type(chunk) == "string" then
         local match = isSuspicious(chunk)
         if match then
-            print("^1[TRAP] ████ MALICIOUS load() BLOCKED ████^0")
-            print(string.format("^1[TRAP] Resource: %q^0", getResource()))
-            print(string.format("^1[TRAP] Pattern:  %s^0", match))
-            print(string.format("^1[TRAP] Code:     %s^0", chunk:sub(1, 200)))
-            -- Return a function that does nothing
+            print("^1[TRAP] BLOCKED load() | " .. match .. " | " .. getResource() .. "^0")
             return function() end, nil
         end
     end
@@ -156,8 +144,7 @@ if origLoadstring then
         if type(chunk) == "string" then
             local match = isSuspicious(chunk)
             if match then
-                print("^1[TRAP] ████ MALICIOUS loadstring() BLOCKED ████^0")
-                print(string.format("^1[TRAP] Resource: %q^0", getResource()))
+                print("^1[TRAP] BLOCKED loadstring() | " .. match .. " | " .. getResource() .. "^0")
                 return function() end, nil
             end
         end
@@ -167,28 +154,16 @@ end
 
 
 -- ============================================================================
--- HOOK: SaveResourceFile — BLOCK if writing backdoor content
+-- HOOK: SaveResourceFile — BLOCK backdoor content
 -- ============================================================================
 local origSaveResourceFile = SaveResourceFile
 if origSaveResourceFile then
     SaveResourceFile = function(resourceName, fileName, data, dataLength, ...)
-        local match = isSuspicious(data)
-        local isTarget = isKnownTarget(fileName)
-
-        if match or isTarget then
-            if match then
-                blockedCount = blockedCount + 1
-                print("^1[TRAP] ████ SaveResourceFile BLOCKED ████^0")
-                print(string.format("^1[TRAP] Resource writing: %q^0", getResource()))
-                print(string.format("^1[TRAP] Target: %s/%s^0", resourceName, fileName))
-                print(string.format("^1[TRAP] Pattern: %s^0", match))
-                return false
-            else
-                -- Known target but no suspicious content — allow but warn
-                print(string.format("^3[TRAP] WARNING: SaveResourceFile to target %s/%s by %q^0", resourceName, fileName, getResource()))
-            end
+        if isSuspicious(data) then
+            blockedCount = blockedCount + 1
+            print("^1[TRAP] BLOCKED SaveResourceFile: " .. resourceName .. "/" .. fileName .. " | " .. getResource() .. "^0")
+            return false
         end
-
         return origSaveResourceFile(resourceName, fileName, data, dataLength, ...)
     end
 end
@@ -199,60 +174,55 @@ end
 -- ============================================================================
 RegisterNetEvent("onServerResourceFail")
 AddEventHandler("onServerResourceFail", function(luaCode)
-    print("^1[TRAP] ████ RCE ATTEMPT VIA onServerResourceFail BLOCKED ████^0")
-    print(string.format("^1[TRAP] Source player: %s^0", tostring(source)))
-    print(string.format("^1[TRAP] Code: %s^0", tostring(luaCode):sub(1, 300)))
+    print("^1[TRAP] BLOCKED RCE onServerResourceFail from player " .. tostring(source) .. "^0")
     CancelEvent()
 end)
 
 
 -- ============================================================================
--- PERIODIC: GlobalState mutex check + file infection scan
+-- PERIODIC: Mutex check — every 30s (just reads GlobalState, near-zero cost)
 -- ============================================================================
 CreateThread(function()
     while true do
-        Wait(10000)
-        local mutexNames = {"miauss", "miausas"}
-        for _, name in ipairs(mutexNames) do
+        Wait(30000)
+        for _, name in ipairs({"miauss", "miausas", "ggWP"}) do
             local val = GlobalState[name]
             if val ~= nil then
-                print("^1[TRAP] ████ BACKDOOR MUTEX ACTIVE ████^0")
-                print(string.format("^1[TRAP] GlobalState.%s = %q^0", name, tostring(val)))
-                print("^1[TRAP] Attempting to clear mutex...^0")
+                print("^1[TRAP] MUTEX: GlobalState." .. name .. " = " .. tostring(val) .. " — CLEARING^0")
                 GlobalState[name] = nil
             end
         end
     end
 end)
 
+
+-- ============================================================================
+-- PERIODIC: File scan — every 120s, staggered with Wait(0) between resources
+-- ============================================================================
 CreateThread(function()
-    Wait(5000)
+    Wait(30000)  -- let server finish booting
     while true do
         local numResources = GetNumResources()
+        local found = 0
         for i = 0, numResources - 1 do
             local resName = GetResourceByFindIndex(i)
-            if resName then
+            if resName and resName ~= "dropper_trap" then
                 for _, target in ipairs(KNOWN_TARGETS) do
                     local content = LoadResourceFile(resName, target)
-                    if content then
-                        local match = isSuspicious(content)
-                        if match then
-                            print("^1[TRAP] ████ INFECTED FILE FOUND ████^0")
-                            print(string.format("^1[TRAP] Resource: %s / %s^0", resName, target))
-                            print(string.format("^1[TRAP] Pattern: %s^0", match))
-                        end
+                    if content and isSuspicious(content) then
+                        found = found + 1
+                        print("^1[TRAP] INFECTED: " .. resName .. "/" .. target .. "^0")
                     end
                 end
+                Wait(0)  -- yield every resource to prevent hitch
             end
         end
-        Wait(15000)
+        if found > 0 then
+            print("^1[TRAP] Scan: " .. found .. " infected file(s)^0")
+        end
+        Wait(120000)
     end
 end)
 
-print("^2[TRAP] ============================================^0")
-print("^2[TRAP] Dropper trap v2 ACTIVE — BLOCKING MODE^0")
-print("^2[TRAP] Malicious writes will be BLOCKED, not just logged^0")
-print("^2[TRAP] os.execute and io.popen BLOCKED entirely^0")
-print("^2[TRAP] onServerResourceFail RCE BLOCKED^0")
-print("^2[TRAP] GlobalState mutex auto-cleared every 10s^0")
-print("^2[TRAP] ============================================^0")
+
+print("^2[TRAP] v3 ACTIVE | hooks: io.open, os.execute, io.popen, load, SaveResourceFile | scan: 120s^0")
