@@ -34,7 +34,7 @@ fi
 
 # ---------- 2. ATTACKER STRINGS ----------
 echo -e "${CYN}[2/8] Scanning for attacker identifiers...${NC}"
-hits=$(grep -rn "bertjj\|bertJJ\|miauss\|miausas\|fivems\.lt\|VB8mdVjrzd\|blum-panel\|warden-panel" --include="*.js" --include="*.lua" --include="*.cfg" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|SCANNER\|scan.sh\|block_c2\|README\|\.md$")
+hits=$(grep -rn "bertjj\|bertJJ\|miauss\|miausas\|fivems\.lt\|VB8mdVjrzd\|blum-panel\|warden-panel\|ggWP" --include="*.js" --include="*.lua" --include="*.cfg" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|SCANNER\|scan.sh\|block_c2\|README\|\.md$")
 if [ -n "$hits" ]; then
     echo -e "${RED}  FOUND — Attacker strings:${NC}"
     echo "$hits" | head -20 | while read line; do echo -e "  ${RED}$line${NC}"; done
@@ -53,6 +53,48 @@ if [ -n "$hits" ]; then
 else
     echo -e "  ${GRN}Clean${NC}"
 fi
+
+# ---------- 3b. TXADMIN BACKDOOR ADMIN ACCOUNT ----------
+echo -e "${CYN}[3b/8] Checking txAdmin for backdoor admin 'JohnsUrUncle'...${NC}"
+admin_found=0
+find "$SCAN_DIR" -name "admins.json" -o -name "*.json" -path "*txData*" -o -name "*.json" -path "*txAdmin*" 2>/dev/null | while read f; do
+    if grep -qi "JohnsUrUncle\|johnsuruncle" "$f" 2>/dev/null; then
+        echo -e "${RED}  FOUND — Backdoor admin in: $f${NC}"
+        echo -e "${RED}  DELETE THIS ACCOUNT IMMEDIATELY and rotate all txAdmin passwords${NC}"
+        admin_found=1
+    fi
+done
+if [ "$admin_found" -eq 0 ]; then echo -e "  ${GRN}Clean${NC}"; fi
+
+# ---------- 3c. TXADMIN FILES — INDIVIDUAL CHECK ----------
+echo -e "${CYN}[3c/8] Checking txAdmin files individually...${NC}"
+find "$SCAN_DIR" -name "cl_playerlist.lua" -path "*/monitor/*" 2>/dev/null | while read f; do
+    if grep -q "helpEmptyCode" "$f" 2>/dev/null; then
+        echo -e "${RED}  INFECTED: $f — client RCE backdoor (helpEmptyCode)${NC}"
+        echo -e "${RED}  FIX: curl -o \"$f\" https://raw.githubusercontent.com/tabarra/txAdmin/master/resource/cl_playerlist.lua${NC}"
+        FOUND=$((FOUND + 1))
+    else
+        echo -e "  ${GRN}cl_playerlist.lua: Clean${NC}"
+    fi
+done
+find "$SCAN_DIR" -name "sv_main.lua" -path "*/monitor/*" 2>/dev/null | while read f; do
+    if grep -q "RESOURCE_EXCLUDE\|isExcludedResource" "$f" 2>/dev/null; then
+        echo -e "${RED}  INFECTED: $f — dashboard resource cloaking${NC}"
+        echo -e "${RED}  FIX: curl -o \"$f\" https://raw.githubusercontent.com/tabarra/txAdmin/master/resource/sv_main.lua${NC}"
+        FOUND=$((FOUND + 1))
+    else
+        echo -e "  ${GRN}sv_main.lua: Clean${NC}"
+    fi
+done
+find "$SCAN_DIR" -name "sv_resources.lua" -path "*/monitor/*" 2>/dev/null | while read f; do
+    if grep -q "onServerResourceFail" "$f" 2>/dev/null; then
+        echo -e "${RED}  INFECTED: $f — server RCE backdoor${NC}"
+        echo -e "${RED}  FIX: curl -o \"$f\" https://raw.githubusercontent.com/tabarra/txAdmin/master/resource/sv_resources.lua${NC}"
+        FOUND=$((FOUND + 1))
+    else
+        echo -e "  ${GRN}sv_resources.lua: Clean${NC}"
+    fi
+done
 
 # ---------- 4. KNOWN DROPPER FILENAMES IN SUSPICIOUS LOCATIONS ----------
 echo -e "${CYN}[4/8] Scanning for dropper files in suspicious paths...${NC}"
