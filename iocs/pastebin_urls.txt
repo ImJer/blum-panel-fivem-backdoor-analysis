@@ -1,0 +1,7 @@
+# Blum Panel Pastebin Fallback URLs
+# These contain updated C2 domain lists
+# As of March 2026, all return "// Empty"
+https://pastebin.com/raw/g5iZ1xha
+https://pastebin.com/raw/Sm9p9tkm
+https://pastebin.com/raw/eViHnPMt
+https://pastebin.com/raw/kwW3u4U5

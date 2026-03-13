@@ -1,0 +1,21 @@
+# Blum Panel / bertjj Detection Strings
+# Grep for any of these across your server files
+bertjj
+bertJJ
+bertjjgg
+bertJJgg
+bertjjcfxre
+bertJJcfxre
+miauss
+miausas
+fivems.lt
+warden-panel
+fivemgtax
+giithub.net
+screenCaptureEvent
+privateChatMap
+VB8mdVjrzd
+onServerResourceFail
+RESOURCE_EXCLUDE
+isExcludedResource
+String.fromCharCode(a[i]^k)
