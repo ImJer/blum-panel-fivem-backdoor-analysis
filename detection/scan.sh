@@ -14,7 +14,7 @@ NC='\033[0m'
 
 echo ""
 echo "============================================"
-echo "  BLUM PANEL MALWARE SCANNER v3"
+echo "  BLUM PANEL MALWARE SCANNER v4"
 echo "============================================"
 echo ""
 
@@ -154,6 +154,40 @@ if grep -q "fivems.lt" /etc/hosts 2>/dev/null; then
     echo -e "  ${GRN}fivems.lt is blocked in /etc/hosts${NC}"
 else
     echo -e "  ${YEL}WARNING: fivems.lt is NOT blocked in /etc/hosts${NC}"
+fi
+
+# --- CHECK 11: Luraph Lua payloads ---
+echo -e "${CYN}[11/13] Checking for Luraph Lua dropper signatures...${NC}"
+LURAPH=$(grep -rn "Luraph Obfuscator" --include="*.lua" 2>/dev/null | head -5)
+if [ -n "$LURAPH" ]; then
+    echo -e "  ${RED}FOUND: Luraph obfuscated Lua files:${NC}"
+    echo "$LURAPH" | while read line; do echo -e "    ${RED}$line${NC}"; done
+    FOUND=$((FOUND+1))
+fi
+
+# --- CHECK 12: Luraph dropper JS filenames + KVP persistence ---
+echo -e "${CYN}[12/13] Checking for Luraph dropper artifacts...${NC}"
+DROPPER_JS=$(grep -rn "installed_notices\|vm').runInThisContext\|9ns1\.com\|devJJ\|nullJJ\|zXeAHJJ" --include="*.js" --include="*.lua" 2>/dev/null | head -5)
+if [ -n "$DROPPER_JS" ]; then
+    echo -e "  ${RED}FOUND: Luraph dropper artifacts:${NC}"
+    echo "$DROPPER_JS" | while read line; do echo -e "    ${RED}$line${NC}"; done
+    FOUND=$((FOUND+1))
+fi
+
+# --- CHECK 13: Discord webhook phone-home ---
+echo -e "${CYN}[13/13] Checking for Discord webhook IOC...${NC}"
+WEBHOOK=$(grep -rn "1470175544682217685\|pe8DNcnZCjKPlKF24tk72R" --include="*.lua" --include="*.js" 2>/dev/null | head -5)
+if [ -n "$WEBHOOK" ]; then
+    echo -e "  ${RED}FOUND: Blum Panel Discord webhook:${NC}"
+    echo "$WEBHOOK" | while read line; do echo -e "    ${RED}$line${NC}"; done
+    FOUND=$((FOUND+1))
+fi
+
+# --- CHECK: 9ns1.com blocked ---
+if grep -q "9ns1.com" /etc/hosts 2>/dev/null; then
+    echo -e "  ${GRN}OK: 9ns1.com is blocked in /etc/hosts${NC}"
+else
+    echo -e "  ${YEL}WARNING: 9ns1.com is NOT blocked in /etc/hosts${NC}"
 fi
 
 echo ""

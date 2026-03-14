@@ -68,3 +68,19 @@ LSxKJm6SpdExCACUcFTUADcvZgea65AaWo
 # Cipher Panel connection
 cipher-panel.me
 ciphercorp
+# Luraph payload detection (March 14 2026)
+9ns1.com
+devJJ
+nullJJ
+zXeAHJJ
+Luraph Obfuscator
+installed_notices
+vm').runInThisContext
+entry.js
+init.js
+stack.js
+runtime.js
+interface.js
+bridge.js
+1470175544682217685
+pe8DNcnZCjKPlKF24tk72Riv6bfQcFM6rmMvrwx_

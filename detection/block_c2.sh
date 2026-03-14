@@ -33,6 +33,7 @@ echo ""
 
 C2_DOMAINS=(
     "fivems.lt"
+    "9ns1.com"
     "0xchitado.com"
     "2312321321321213.com"
     "2ns3.net"

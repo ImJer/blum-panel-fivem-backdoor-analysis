@@ -172,3 +172,53 @@ Note: Server-side validates Discord ID against database, not just the frontend `
 | Cfx.re | FiveM Team | Full analysis package |
 | .lt registrar | DOMREG.lt | fivems.lt, jking.lt — malware distribution |
 | JScrambler | Notify of misuse | Commercial obfuscator used for malware |
+
+---
+
+## Luraph Lua Payloads (Discovered March 14, 2026)
+
+### Overview
+Three Lua-based initial infection payloads served from fivems.lt, obfuscated with Luraph v14.6.
+These are the FIRST STAGE — they drop XOR-encrypted JS files that fetch the full 1.6MB replicator.
+
+### Payload Variants
+
+| Endpoint | Size | MD5 | API Key | C2 Target |
+|----------|------|-----|---------|-----------|
+| `/test` | 65,564 bytes | 97a72874d068f103e75306a314839f1f | zXeAH | 9ns1.com/zXeAHJJ |
+| `/dev` | 64,115 bytes | a6fa269b841893eeb39b900fdd29e66a | dev | fivems.lt/devJJ |
+| `/null` | 64,289 bytes | 01df43eefebdc1f134a4872a6e78a24a | null | fivems.lt/nullJJ |
+
+### Second C2 Domain: 9ns1.com
+The `test` payload (API key "zXeAH") connects to `https://9ns1.com/zXeAHJJ` instead of fivems.lt.
+This is a previously unknown C2 domain. The attacker is distributing infrastructure across domains.
+
+### Discord Webhook (Phone-Home)
+All three payloads share the same Discord webhook for infection notifications:
+- **Webhook ID:** 1470175544682217685
+- **URL:** `https://discord.com/api/webhooks/1470175544682217685/pe8DNcnZCjKPlKF24tk72Riv6bfQcFM6rmMvrwx_YeGm0P1oVtDHxp4_HbKCHvRiPBJP`
+- **Purpose:** Sends embed with resource name, server hostname, and player count on each new infection
+- **Embed title:** Set to the API key (dev/null/zXeAH) so attacker knows which variant infected
+
+### Dual Obfuscator Setup
+| Layer | Obfuscator | Language | Cost |
+|-------|------------|----------|------|
+| Initial infection | Luraph v14.6 | Lua | ~$20/month |
+| JS dropper + replicator | JScrambler | JavaScript | ~$100/month |
+
+### API Key Pattern
+All C2 endpoints follow the pattern: `/<key>JJ`
+- bertJJ (original), bertJJgg (fallback), bertJJcfxre (fallback)
+- devJJ
+- nullJJ
+- zXeAHJJ (on different domain)
+
+### JS Dropper Characteristics (polymorphic)
+- Filename randomly chosen: entry.js, init.js, stack.js, runtime.js, interface.js, bridge.js
+- XOR key format: "r" + 4 random digits (e.g., r2464, r5246)
+- Payload wrapped in 700+ byte space comment block
+- Decryption via `require('vm').runInThisContext(decoded)`
+- Persistence via KVP key "installed_notices"
+
+### Self-Reported Version: v4.5
+The webhook embed footer contains "v4.5", indicating the attacker tracks versions.
