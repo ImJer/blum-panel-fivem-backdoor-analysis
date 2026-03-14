@@ -3,7 +3,7 @@
 **Classification:** Security Research  
 **Date:** March 13–14, 2026  
 **Duration:** ~14 hours  
-**Investigators:** [Redacted] + JGN
+**Investigators:** [Redacted] + [Redacted]
 **Status:** Active — C2 infrastructure still online  
 
 ---
