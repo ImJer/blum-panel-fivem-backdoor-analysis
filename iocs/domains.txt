@@ -22,3 +22,5 @@ warden-panel.me
 2nit32.com
 useer.it.com
 wsichkidolu.com
+cipher-panel.me
+blum-panel.me

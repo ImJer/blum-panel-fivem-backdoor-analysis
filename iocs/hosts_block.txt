@@ -27,3 +27,5 @@
 0.0.0.0 blum-panel.me
 0.0.0.0 www.blum-panel.me
 0.0.0.0 www.warden-panel.me
+0.0.0.0 cipher-panel.me
+0.0.0.0 www.cipher-panel.me

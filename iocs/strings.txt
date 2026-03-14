@@ -46,3 +46,25 @@ hook_system.js
 patch_update.js
 # Dropper template marker
 // if you found this contact us to fix problems
+# Panel events (from frontend analysis)
+joinServerRoom
+leaveServerRoom
+requestPlayersDetailed
+admin:runPayload
+admin:getToken
+admin:executeCmd
+fs:startConsoleStream
+discord:connect
+discord:banMember
+# Panel admin
+x-discord-id
+admin_backend_url
+discord_admin_user
+# Crypto wallets
+bc1q2wd7y6cp5dukcj3krs8rgpysa9ere0rdre7hhj
+LSxKJm6SpdExCACUcFTUADcvZgea65AaWo
+# Discord OAuth
+1444110004402655403
+# Cipher Panel connection
+cipher-panel.me
+ciphercorp

@@ -1,0 +1,174 @@
+# Blum Panel — Attacker Identity & Financial Intelligence
+
+## Operator Identity
+
+### Discord Admin Accounts (hardcoded in panel frontend `Hf` array)
+| Discord ID | Created (approx) | Role |
+|------------|-------------------|------|
+| `393666265253937152` | ~Late 2018 | Primary operator / owner |
+| `1368690772123062292` | ~May 2025 | Secondary admin |
+
+### Discord OAuth Application
+- **Client ID:** `1444110004402655403`
+- **Redirect:** `https://blum-panel.me` and `https://warden-panel.me`
+- **Scope:** `identify` (reads Discord user info)
+
+### Known Handles
+- bertjj, bertjjgg, bertjjcfxre, miausas, miauss
+- Discord server: discord.com/invite/VB8mdVjrzd
+- Also linked: discord.gg/ciphercorp (Cipher Panel Discord)
+
+---
+
+## Brand History (same operation, rebranded)
+
+| Period | Brand | Domain | Evidence |
+|--------|-------|--------|----------|
+| 2021–2025 | **Cipher Panel** | cipher-panel.me | Cfx.re forum reports, Discord invite in code, URLs in panel JS bundle |
+| 2025–2026 | **Blum Panel** | blum-panel.me | Primary brand, SEO-optimized landing page |
+| 2026+ | **Warden Panel** | warden-panel.me | Rebrand/alias, same Express backend, same Socket.IO |
+
+Evidence of connection: Panel JS bundle (`index-BmknYBUo.js`) contains hardcoded URLs to `cipher-panel.me/secure_area/fivem/sv/typer/` and references to `discord.gg/ciphercorp`.
+
+---
+
+## Cryptocurrency Wallets
+
+### Bitcoin (BTC)
+- **Address:** `bc1q2wd7y6cp5dukcj3krs8rgpysa9ere0rdre7hhj`
+- **Total received:** 0.02353255 BTC (~$2,000-$2,100)
+- **Current balance:** 0.02078484 BTC (~$1,800)
+- **Transactions:** 9
+- **Active period:** November 28, 2025 — February 28, 2026
+
+Transaction history:
+```
+2025-11-28  RECEIVED  0.00119000 BTC  (first payment)
+2025-12-31  RECEIVED  0.00160900 BTC
+2026-01-02  RECEIVED  0.01331293 BTC  (largest — likely lifetime plan)
+2026-01-04  RECEIVED  0.00064200 BTC
+2026-01-15  RECEIVED  0.00170494 BTC
+2026-01-25  RECEIVED  0.00091571 BTC + WITHDRAWAL
+2026-02-01  RECEIVED  0.00052909 BTC + WITHDRAWAL
+2026-02-25  RECEIVED  0.00102200 BTC
+2026-02-28  RECEIVED  0.00260688 BTC  (most recent)
+```
+
+### Litecoin (LTC) — PRIMARY PAYMENT CHANNEL
+- **Address:** `LSxKJm6SpdExCACUcFTUADcvZgea65AaWo`
+- **Total received:** 76.53 LTC (~$7,600-$9,900)
+- **Total withdrawn:** 44.97 LTC
+- **Current balance:** 31.56 LTC
+- **Transactions:** 89 (88 incoming)
+- Estimated **60-90 unique customers** based on transaction count and pricing
+
+### Solana (SOL)
+- **Address:** `vDWomGGtBctKqtTkRm6maXc7KJrvtmc2x8WXEzbuzkz`
+- No transaction data retrieved (may be inactive or invalid address)
+
+### Alternative Payment Methods
+- **Amazon Gift Cards (GBP):** £50 and £120 denominations
+  - Purchase links to eneba.com and g2a.com in panel
+  - GBP denomination suggests **UK-based customer base**
+- **MoonPay:** Fiat-to-crypto integration (moonpay.com/en-gb — also UK)
+- **CoinGecko:** Price checking in **EUR** (seller prices in Euros)
+
+### Combined Revenue Estimate
+- BTC: ~$2,000
+- LTC: ~$8,000-$10,000
+- Gift cards: unknown (untraceable)
+- **Minimum total: ~$10,000-$12,000** from crypto alone
+- Operation active since 2021 under Cipher brand — total lifetime revenue likely significantly higher
+
+---
+
+## Pricing
+
+| Plan | Price | Duration |
+|------|-------|----------|
+| Basic | €59.99 | Monthly |
+| Ultima | €139.99 | Lifetime |
+
+Payment webhook security code: `1221885230680375427`
+Payment webhook endpoint: `<backend>/api/payment-webhook`
+
+---
+
+## Infrastructure
+
+### C2 Server
+- **Domain:** fivems.lt
+- **IPs:** 172.67.184.207, 104.21.59.225 (Cloudflare proxy)
+- **Origin:** Hidden behind Cloudflare
+- **TLD:** .lt (Lithuania)
+- **SSL issuer:** Google Trust Services (WE1)
+- **SSL cert renewed:** March 12, 2026 (actively maintained)
+- **Backend:** Express.js (x-powered-by: Express)
+
+### File Hosting Server
+- **IP:** 185.80.128.35
+- **Hosting:** UAB "Esnet" (VPSNET-COM)
+- **Address:** Zuvedru g. 36, Vilnius, Lithuania LT-10103
+- **Abuse contact:** abuse@vpsnet.lt
+- **Server:** Apache/2.4.29 (Ubuntu 18.04)
+- **Open ports:** 22 (SSH), 80 (HTTP)
+- **Purpose:** Stolen resource ZIP hosting at /download-resource/<filename>
+
+### Panel Domains (all behind Cloudflare)
+| Domain | Backend | SSL Issuer |
+|--------|---------|------------|
+| blum-panel.me | Express.js | Google Trust Services |
+| warden-panel.me | Express.js | Google Trust Services |
+| cipher-panel.me | nginx/1.18.0 | Google Trust Services |
+| fivems.lt | Express.js | Google Trust Services |
+
+### Obfuscation
+- **Tool:** JScrambler (commercial JavaScript obfuscator)
+- **Bloat ratio:** ~200:1 (425KB for 50 lines of dropper code)
+- **Cost:** JScrambler pricing starts at ~$100/month
+
+---
+
+## Geographic Indicators
+
+| Indicator | Points to |
+|-----------|-----------|
+| .lt domain TLD | Lithuania |
+| File server hosting (UAB Esnet, Vilnius) | Lithuania |
+| jking.lt in C2 domain list | Lithuania |
+| EUR pricing | European Union |
+| GBP gift cards | UK customer base |
+| moonpay.com/en-gb | UK customers |
+| cipher-panel.me nginx server | Separate infrastructure |
+
+---
+
+## Admin API Routes (server-side auth validated)
+
+```
+GET  /admin/stats                    — Panel statistics
+GET  /admin/users                    — All customers
+GET  /admin/servers?page=N&limit=N   — Infected server list (paginated)
+GET  /admin/payloads                 — All payloads
+GET  /admin/activity                 — Activity log
+POST /admin/users                    — Create customer
+PUT  /admin/users/{api}              — Update customer
+DELETE /admin/users/{api}            — Delete customer
+DELETE /admin/servers/{id}           — Delete server
+```
+
+Auth header: `x-discord-id: <discord_user_id>`
+Note: Server-side validates Discord ID against database, not just the frontend `Hf` array. Cannot be bypassed with spoofed headers alone.
+
+---
+
+## Abuse Report Contacts
+
+| Service | Contact | Report For |
+|---------|---------|------------|
+| Cloudflare | abuse@cloudflare.com | fivems.lt, blum-panel.me, warden-panel.me — malware C2 |
+| UAB Esnet | abuse@vpsnet.lt | 185.80.128.35 — stolen file hosting |
+| Discord | Trust & Safety | discord.com/invite/VB8mdVjrzd, App ID 1444110004402655403, User IDs 393666265253937152 & 1368690772123062292 |
+| Cfx.re | FiveM Team | Full analysis package |
+| .lt registrar | DOMREG.lt | fivems.lt, jking.lt — malware distribution |
+| JScrambler | Notify of misuse | Commercial obfuscator used for malware |

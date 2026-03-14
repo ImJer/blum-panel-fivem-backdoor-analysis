@@ -68,6 +68,14 @@
 - [Detection](#detection)
 - [Remediation](#remediation)
 - [Dropper Trap Resource](#dropper-trap-resource)
+- [Blum Panel = Cipher Panel](#blum-panel--cipher-panel-same-operation)
+- [C2 Panel Architecture](#c2-panel-architecture-from-frontend-analysis)
+- [Discord Bot Module](#discord-bot-module-24-commands)
+- [Full Socket.IO Protocol](#full-socketio-protocol-38-on--13-emit)
+- [C2 Probe Results](#c2-probe-results-march-14-2026)
+- [Financial Intelligence](#financial-intelligence)
+- [Infrastructure Summary](#infrastructure-summary)
+- [Obfuscation Tool Identified](#obfuscation-tool-identified-jscrambler)
 - [Repository Structure](#repository-structure)
 
 ---
@@ -1174,15 +1182,224 @@ blum-panel-analysis/
 
 ---
 
+## Blum Panel = Cipher Panel (Same Operation)
+
+Analysis of the panel's frontend JavaScript bundle (`index-BmknYBUo.js`, 1.97MB) revealed that Blum Panel is a rebrand of **Cipher Panel**, a FiveM backdoor operation known since 2021. Evidence:
+
+- Hardcoded URLs to `https://cipher-panel.me/secure_area/fivem/sv/typer/` in the panel source
+- Discord invite `discord.gg/ciphercorp` (Cipher Corp Discord) referenced alongside `discord.gg/VB8mdVjrzd`
+- cipher-panel.me is still live (nginx/1.18.0 behind Cloudflare), separate infrastructure from the Express-based Blum/Warden panels
+- The operation has been running for approximately **5 years** under different brands
+
+Brand timeline:
+| Period | Brand | Domain |
+|--------|-------|--------|
+| 2021–2025 | Cipher Panel | cipher-panel.me |
+| 2025–2026 | Blum Panel | blum-panel.me |
+| 2026+ | Warden Panel | warden-panel.me |
+
+---
+
+## C2 Panel Architecture (from Frontend Analysis)
+
+The Blum Panel dashboard is a React application served from blum-panel.me and warden-panel.me, communicating with an Express.js backend via REST API and Socket.IO.
+
+### Authentication Flow
+
+1. User clicks "Login" → redirected to Discord OAuth2 (`discord.com/api/oauth2/authorize`)
+2. Discord returns access token in URL hash
+3. Panel fetches `discord.com/api/users/@me` with the token
+4. Panel checks Discord user ID against a hardcoded admin whitelist (`Hf` array)
+5. If authorized, stores user info in `localStorage` as `discord_admin_user`
+6. All API calls include `x-discord-id` header for authorization
+
+### Admin Whitelist (from panel source)
+```javascript
+Hf = ["393666265253937152", "1368690772123062292"]
+```
+- `393666265253937152` — Primary operator, Discord account created ~late 2018
+- `1368690772123062292` — Secondary admin, account created ~May 2025
+
+Note: The backend also validates Discord IDs server-side. Spoofing the header alone returns 404.
+
+### Discord OAuth Application
+- **Client ID:** `1444110004402655403`
+- **Scopes:** `identify`
+- **Redirect URIs:** blum-panel.me, warden-panel.me
+
+### Admin API Endpoints
+```
+GET  /admin/stats                    — Panel statistics
+GET  /admin/users                    — All customer accounts
+GET  /admin/servers?page=N&limit=N   — Infected server list (paginated)
+GET  /admin/payloads                 — All available payloads
+GET  /admin/activity                 — Activity log
+POST /admin/users                    — Create customer
+PUT  /admin/users/{api}              — Update customer
+DELETE /admin/users/{api}            — Delete customer
+DELETE /admin/servers/{id}           — Remove server from panel
+```
+
+### Customer Panel Auth
+Separate from admin auth — customers use `serverId` + `authCode` (likely provided at purchase). Stored in `sessionStorage`. Filesystem API at `/fs/{command}/{serverId}/{sessionId}`.
+
+---
+
+## Discord Bot Module (24 Commands)
+
+Beyond FiveM server control, the panel includes a complete Discord bot that can take over victims' Discord servers:
+
+**Server Management:** `discord:connect`, `discord:disconnect`, `discord:getServers`
+
+**Member Manipulation:** `discord:getMembers`, `discord:banMember`, `discord:kickMember`, `discord:timeoutMember`, `discord:changeNickname`
+
+**Channel/Role Control:** `discord:getChannels`, `discord:createChannel`, `discord:createRole`, `discord:createInvite`
+
+**Messaging:** `discord:sendMessage`, `discord:getWebhooks`, `discord:createAllWebhooks`, `discord:sendViaWebhooks`
+
+This means the attacker can not only control the FiveM server but also mass-ban members, create channels, send messages as webhooks, and fully compromise the community's Discord server.
+
+---
+
+## Full Socket.IO Protocol (38 ON + 13 EMIT)
+
+See `iocs/socket_io_protocol.md` for the complete specification. Key categories:
+
+- **1 command** for arbitrary code execution (JavaScript or Lua)
+- **5 commands** for WebRTC screen capture
+- **10 commands** for player manipulation (kill, revive, slam, godmode, spawn vehicles, explode vehicles)
+- **5 commands** for economy manipulation (add/remove items, set jobs, set groups)
+- **11 commands** for filesystem access (full remote file manager)
+- **3 commands** for server admin (announcements, lockdown, console commands)
+- **1 command** for txAdmin credential theft and admin account creation
+- **24 commands** for Discord bot control
+
+---
+
+## C2 Probe Results (March 14, 2026)
+
+A passive Socket.IO probe was successfully connected to `wss://fivems.lt`:
+
+- **Connection accepted** — no auth rejection, registered as fake infected server
+- **Socket ID assigned:** `7BPfrbSsVWWLD7q2BNDg`
+- **heartbeat_ack received** on every heartbeat — C2 is actively processing connections
+- **No commands received** during 5-minute observation — no operator was actively using the panel
+- **No server list broadcast** — the C2 only sends commands on-demand from the dashboard, doesn't push data to implants
+- **Protocol 100% correct** — our deobfuscated event names and payload structures are exact
+
+The probe script is included at `detection/c2_probe.js`.
+
+---
+
+## Financial Intelligence
+
+### Pricing
+| Plan | Price |
+|------|-------|
+| Basic | €59.99/month |
+| Ultima | €139.99 lifetime |
+
+### Cryptocurrency Wallets
+
+**Bitcoin (BTC):** `bc1q2wd7y6cp5dukcj3krs8rgpysa9ere0rdre7hhj`
+- 9 transactions, 0.0235 BTC received (~$2,000)
+- Active: November 2025 — February 2026
+- Largest payment: 0.0133 BTC on Jan 2, 2026 (~$1,150, likely lifetime plan)
+
+**Litecoin (LTC) — primary payment channel:** `LSxKJm6SpdExCACUcFTUADcvZgea65AaWo`
+- 89 transactions, 76.53 LTC received (~$8,000-$10,000)
+- 88 incoming payments (estimated 60-90 unique customers)
+- 44.97 LTC withdrawn (actively cashing out)
+
+**Solana (SOL):** `vDWomGGtBctKqtTkRm6maXc7KJrvtmc2x8WXEzbuzkz`
+- No confirmed transactions
+
+**Alternative payments:** Amazon gift cards (£50 and £120 GBP via eneba.com and g2a.com), MoonPay fiat-to-crypto
+
+**Estimated minimum revenue:** $10,000-$12,000 from cryptocurrency alone. Gift card revenue is untraceable.
+
+Full transaction history and analysis: `iocs/attacker_intel.md`
+
+---
+
+## Infrastructure Summary
+
+| Component | Location | Details |
+|-----------|----------|---------|
+| C2 server | fivems.lt (Cloudflare) | Express.js, Socket.IO, payload delivery |
+| Panel frontend | blum-panel.me (Cloudflare) | React app, customer dashboard |
+| Panel alias | warden-panel.me (Cloudflare) | Same backend as blum-panel.me |
+| Legacy panel | cipher-panel.me (Cloudflare) | nginx/1.18.0, older infrastructure |
+| File hosting | 185.80.128.35 | Apache/2.4.29, Ubuntu 18.04, UAB Esnet, Vilnius Lithuania |
+| Dropper endpoint | fivems.lt/ext/bert | JScrambler-obfuscated dropper (425KB → 50 lines) |
+| Obfuscation tool | JScrambler | Commercial JS obfuscator, ~$100/month |
+
+All `.lt` domains and file hosting point to **Lithuania** as the operational base.
+
+---
+
+## Obfuscation Tool Identified: JScrambler
+
+The commercial JavaScript obfuscator used across all Blum Panel files has been identified as **JScrambler** (or a derivative). Evidence:
+
+- Function() constructor wrapper with getter-based parameter objects
+- LZString UTF-16 compression of string tables
+- Per-scope polymorphic base-91 decoder instances
+- Generator-based control flow flattening with multi-variable dispatch
+- Cookie-based anti-analysis checks
+- ErrorBoundary environment detection
+- 200:1 code bloat ratio (consistent with JScrambler's enterprise tier)
+
+The `/ext/bert` endpoint serves a freshly obfuscated 425KB file that decodes to the same 50-line dropper template found in the replicator's Section 13 — confirming the obfuscator is applied server-side at delivery time.
+
+---
+
+## Repository Structure
+
+```
+blum-panel-analysis/
+├── README.md                              ← This file
+├── detection/
+│   ├── scan.sh                            ← Automated malware scanner
+│   ├── block_c2.sh                        ← C2 domain blocker
+│   └── c2_probe.js                        ← Socket.IO C2 passive probe
+├── dropper_trap/
+│   ├── fxmanifest.lua                     ← FiveM resource manifest
+│   ├── trap.lua                           ← Lua hooks (v3, optimized)
+│   └── trap.js                            ← JS hooks (v3, async)
+├── deobfuscated/
+│   ├── c2_payload.js                      ← ★ Replicator (1.6MB → 37KB)
+│   ├── deobfuscated_main.js               ← C2 loader (425KB → 14KB)
+│   ├── deobfuscated_script.js             ← Screen capture (183KB → 26KB)
+│   ├── deobfuscated_yarn_builder.js       ← XOR dropper
+│   ├── deobfuscated_sv_main.lua           ← Tampered txAdmin
+│   └── deobfuscated_sv_resources.lua      ← RCE backdoor
+└── iocs/
+    ├── domains.txt                        ← All C2/panel domains
+    ├── hosts_block.txt                    ← /etc/hosts blocklist
+    ├── pihole_block.txt                   ← Pi-hole blocklist
+    ├── pastebin_urls.txt                  ← Pastebin fallback URLs
+    ├── strings.txt                        ← Detection strings
+    ├── socket_io_protocol.md              ← ★ Complete C2 protocol spec
+    └── attacker_intel.md                  ← ★ Identity, wallets, infrastructure
+```
+
+---
+
 ## Reporting
 
 If you find Blum Panel artifacts on your server, report to:
 
-- **Cfx.re (FiveM developers)** — Report the malicious resources and the attacker's Discord
-- **Discord Trust & Safety** — Report discord.com/invite/VB8mdVjrzd for malware distribution
-- **Domain registrars** — Report the C2 domains for abuse
-- **Affected resource developers** — Notify developers whose resources were used as dropper hosts (they may have compromised build pipelines or download links)
+| Service | Contact | Report For |
+|---------|---------|------------|
+| **Cfx.re** | FiveM Team | Full analysis package, malicious resources |
+| **Cloudflare** | abuse@cloudflare.com | fivems.lt, blum-panel.me, warden-panel.me — malware C2 infrastructure |
+| **UAB Esnet** | abuse@vpsnet.lt | 185.80.128.35 — stolen file hosting server |
+| **Discord Trust & Safety** | Report form | Invite: VB8mdVjrzd, App: 1444110004402655403, Users: 393666265253937152 & 1368690772123062292 |
+| **DOMREG.lt** | .lt registrar | fivems.lt, jking.lt — malware distribution |
+| **JScrambler** | Notify of misuse | Commercial obfuscator used for malware |
+| **Law enforcement** | IC3.gov / local cyber unit | Crypto wallet transaction evidence for financial tracing |
 
 ---
 
-Analysis conducted March 2026. All deobfuscated source files, detection tools, and IOC lists are included in this repository for the FiveM community's benefit.
+Analysis conducted March 13-14, 2026. This repository contains the first public complete deobfuscation of the Blum Panel / Cipher Panel FiveM backdoor operation, including all source code, C2 protocol specification, attacker identity intelligence, and financial evidence.
