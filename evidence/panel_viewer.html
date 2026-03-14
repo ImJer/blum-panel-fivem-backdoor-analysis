@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>JGN Blum Panel Investigation</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', monospace; }
+
+.header {
+    background: linear-gradient(135deg, #161b22 0%, #1a0a0a 100%);
+    border-bottom: 1px solid #e94560;
+    padding: 20px 30px;
+}
+.header h1 { color: #e94560; font-size: 22px; }
+.header .sub { color: #8b949e; font-size: 13px; margin-top: 4px; }
+
+.tabs {
+    display: flex;
+    background: #161b22;
+    border-bottom: 1px solid #21262d;
+    padding: 0 20px;
+}
+.tab {
+    padding: 12px 20px;
+    cursor: pointer;
+    color: #8b949e;
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+.tab:hover { color: #c9d1d9; }
+.tab.active { color: #e94560; border-bottom-color: #e94560; }
+
+.content { padding: 20px 30px; display: none; }
+.content.active { display: block; }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 25px;
+}
+.stat-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 16px;
+}
+.stat-card .value { font-size: 28px; color: #e94560; font-weight: bold; }
+.stat-card .label { color: #8b949e; font-size: 12px; margin-top: 4px; }
+
+#status {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    display: inline-block;
+    margin-top: 8px;
+}
+.connected { background: #0a3d0a; border: 1px solid #00ff41; color: #00ff41; }
+.disconnected { background: #3d0a0a; border: 1px solid #ff4141; color: #ff4141; }
+.connecting { background: #3d3d0a; border: 1px solid #ffff41; color: #ffff41; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+th {
+    text-align: left;
+    padding: 10px 8px;
+    background: #161b22;
+    color: #e94560;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    cursor: pointer;
+    border-bottom: 1px solid #21262d;
+}
+th:hover { color: #ff6b81; }
+td {
+    padding: 8px;
+    border-bottom: 1px solid #161b22;
+    font-size: 12px;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+tr:hover { background: #161b22; }
+
+.hot { color: #ff4141; font-weight: bold; }
+.warm { color: #ffa500; }
+.cold { color: #484f58; }
+
+.search-bar {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    padding: 10px 15px;
+    color: #c9d1d9;
+    width: 100%;
+    max-width: 400px;
+    font-size: 13px;
+    margin-bottom: 15px;
+}
+.search-bar:focus { outline: none; border-color: #e94560; }
+
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+}
+.badge-esx { background: #1a3a1a; color: #4ae94e; }
+.badge-qb { background: #1a1a3a; color: #4e8ae9; }
+.badge-vrp { background: #3a1a3a; color: #e94edb; }
+.badge-win { background: #1a2a3a; color: #58a6ff; }
+.badge-linux { background: #2a1a0a; color: #ffa657; }
+
+.chart-bar {
+    height: 20px;
+    background: #e94560;
+    border-radius: 3px;
+    margin: 3px 0;
+    min-width: 2px;
+    transition: width 0.3s;
+}
+.chart-row { display: flex; align-items: center; margin: 4px 0; }
+.chart-label { width: 120px; font-size: 11px; color: #8b949e; text-align: right; padding-right: 10px; }
+.chart-value { font-size: 11px; color: #8b949e; padding-left: 8px; min-width: 40px; }
+
+.infra-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+.infra-card h3 { color: #e94560; font-size: 14px; margin-bottom: 10px; }
+.infra-row { display: flex; padding: 4px 0; font-size: 12px; }
+.infra-key { color: #8b949e; width: 160px; flex-shrink: 0; }
+.infra-val { color: #c9d1d9; }
+.infra-val.live { color: #00ff41; }
+.infra-val.dead { color: #ff4141; }
+
+.player-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+.player-card h4 { color: #58a6ff; font-size: 13px; margin-bottom: 8px; }
+.player-row { font-size: 11px; padding: 2px 0; color: #8b949e; }
+.player-row span { color: #c9d1d9; }
+
+#log {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 11px;
+    color: #484f58;
+    margin-top: 15px;
+}
+
+.section-title {
+    color: #e94560;
+    font-size: 16px;
+    margin: 20px 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #21262d;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Justice Gaming Network — Blum Panel Investigation Dashboard</h1>
+    <div class="sub">Real-time C2 monitoring &amp; evidence collection | discord.gg/JRP</div>
+    <div style="color:#ffa500;font-size:11px;margin-top:4px;">PUBLIC RELEASE — Server IPs, player IPs, Discord IDs, licenses, and identifiers are redacted. Server names shown for victim identification only.</div>
+    <div id="status" class="connecting">Connecting to C2...</div>
+</div>
+
+<div class="tabs">
+    <div class="tab active" onclick="showTab('overview')">Overview</div>
+    <div class="tab" onclick="showTab('servers')">Servers (3856)</div>
+    <div class="tab" onclick="showTab('players')">Live Players</div>
+    <div class="tab" onclick="showTab('customers')">Customers</div>
+    <div class="tab" onclick="showTab('infra')">Infrastructure</div>
+    <div class="tab" onclick="showTab('log')">Event Log</div>
+</div>
+
+<!-- OVERVIEW TAB -->
+<div id="tab-overview" class="content active">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="value" id="s-total">0</div>
+            <div class="label">Total Infected Servers</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="s-players" style="color:#ff4141">0</div>
+            <div class="label">Players At Risk Right Now</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="s-active" style="color:#ffa500">0</div>
+            <div class="label">Servers With Players</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="s-capacity" style="color:#58a6ff">0</div>
+            <div class="label">Total Max Capacity</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="s-customers" style="color:#bc8cff">0</div>
+            <div class="label">Paying Customers</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="s-pcs" style="color:#ffa657">0</div>
+            <div class="label">Personal PCs Compromised</div>
+        </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+        <div>
+            <div class="section-title">By Framework</div>
+            <div id="chart-fw"></div>
+        </div>
+        <div>
+            <div class="section-title">By API Key (Customer)</div>
+            <div id="chart-keys"></div>
+        </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-top:15px;">
+        <div>
+            <div class="section-title">By Operating System</div>
+            <div id="chart-os"></div>
+        </div>
+        <div>
+            <div class="section-title">Top Countries</div>
+            <div id="chart-locale"></div>
+        </div>
+    </div>
+</div>
+
+<!-- SERVERS TAB -->
+<div id="tab-servers" class="content">
+    <input class="search-bar" id="server-search" placeholder="Search by name, IP, key, framework..." oninput="filterServers()">
+    <div style="font-size:12px;color:#8b949e;margin-bottom:10px;">
+        Showing <span id="showing-count">0</span> servers | Sorted by player count (click headers to re-sort)
+    </div>
+    <div style="max-height:70vh;overflow-y:auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th onclick="sortServers('idx')">#</th>
+                    <th onclick="sortServers('servername')">Server Name</th>
+                    <th onclick="sortServers('ip')">IP</th>
+                    <th onclick="sortServers('playercount')">Players</th>
+                    <th onclick="sortServers('framework')">Framework</th>
+                    <th onclick="sortServers('osEnvironment')">OS</th>
+                    <th onclick="sortServers('apiKey')">API Key</th>
+                    <th onclick="sortServers('serverUptime')">Uptime</th>
+                    <th onclick="sortServers('license')">License</th>
+                    <th onclick="sortServers('locale')">Locale</th>
+                </tr>
+            </thead>
+            <tbody id="server-tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- PLAYERS TAB -->
+<div id="tab-players" class="content">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="value" id="p-total" style="color:#ff4141">0</div>
+            <div class="label">Players With Exposed PII</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="p-servers" style="color:#ffa500">0</div>
+            <div class="label">Servers Probed</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="p-ips" style="color:#ff4141">0</div>
+            <div class="label">Real IPs Exposed</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="p-discords" style="color:#58a6ff">0</div>
+            <div class="label">Discord IDs Exposed</div>
+        </div>
+    </div>
+    <div class="section-title">Data Exposed Per Player</div>
+    <p style="font-size:13px;color:#8b949e;margin-bottom:15px;">
+        The Blum Panel C2 returns the following PII for every connected player — accessible without any authentication:
+        <strong style="color:#ff4141">Real IP Address</strong>,
+        <strong style="color:#ffa500">Player Name</strong>,
+        <strong style="color:#58a6ff">Discord ID</strong>,
+        <strong style="color:#bc8cff">Steam/License Identifier</strong>,
+        <strong style="color:#c9d1d9">Server ID</strong>
+    </p>
+    <div class="section-title">Live Player Data (Sampled from Top 10 Servers)</div>
+    <div id="player-list"></div>
+    <div style="margin-top:15px;">
+        <button onclick="refreshPlayers()" style="background:#e94560;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:13px;">
+            Refresh Player Data
+        </button>
+    </div>
+</div>
+
+<!-- CUSTOMERS TAB -->
+<div id="tab-customers" class="content">
+    <div class="section-title">Blum Panel Customers (by API Key)</div>
+    <p style="font-size:13px;color:#8b949e;margin-bottom:15px;">
+        Each unique API key represents a paying customer. Keys follow the pattern: nameJJ
+    </p>
+    <table>
+        <thead>
+            <tr><th>API Key</th><th>Servers</th><th>Players Online</th><th>Top Framework</th><th>Estimated Revenue</th></tr>
+        </thead>
+        <tbody id="customer-tbody"></tbody>
+    </table>
+</div>
+
+<!-- INFRASTRUCTURE TAB -->
+<div id="tab-infra" class="content">
+    <div class="section-title">Panel Domains (All Identical Bundle: index-BmknYBUo.js)</div>
+    <div class="infra-card">
+        <h3>Blum Panel Network — Single Express.js Backend</h3>
+        <div class="infra-row"><div class="infra-key">blum-panel.me</div><div class="infra-val live">ACTIVE — Cloudflare — Panel + C2</div></div>
+        <div class="infra-row"><div class="infra-key">warden-panel.me</div><div class="infra-val live">ACTIVE — Cloudflare — Panel + C2</div></div>
+        <div class="infra-row"><div class="infra-key">9ns1.com</div><div class="infra-val live">ACTIVE — Cloudflare — Panel + C2</div></div>
+        <div class="infra-row"><div class="infra-key">fivems.lt</div><div class="infra-val live">ACTIVE — Cloudflare — Panel + C2</div></div>
+        <div class="infra-row"><div class="infra-key">jking.lt</div><div class="infra-val live">ACTIVE — Cloudflare — Panel + C2 (count:2)</div></div>
+        <div class="infra-row"><div class="infra-key">Heartbeat count</div><div class="infra-val">4 active users (blum/warden/9ns1) | 2 (jking)</div></div>
+        <div class="infra-row"><div class="infra-key">Evidence</div><div class="infra-val">All return identical heartbeat count — single backend</div></div>
+    </div>
+
+    <div class="infra-card">
+        <h3>GFX Panel — Second Product, Same Attacker</h3>
+        <div class="infra-row"><div class="infra-key">gfxpanel.org</div><div class="infra-val live">ACTIVE — 185.80.130.168 — NO CLOUDFLARE</div></div>
+        <div class="infra-row"><div class="infra-key">kutingplays.com</div><div class="infra-val live">ACTIVE — 185.80.130.168 — NO CLOUDFLARE</div></div>
+        <div class="infra-row"><div class="infra-key">Bundle</div><div class="infra-val">index-B62S1OtC.js (749KB — built with GPT Engineer)</div></div>
+        <div class="infra-row"><div class="infra-key">Discord</div><div class="infra-val dead">discord.gg/cwd5kHwq6v (DEAD)</div></div>
+        <div class="infra-row"><div class="infra-key">GPT Engineer ID</div><div class="infra-val">eSi92A9tMBTQWYu6OPvMFhyFiy72</div></div>
+    </div>
+
+    <div class="infra-card">
+        <h3>Cipher Panel — Original (Code Stolen by Blum)</h3>
+        <div class="infra-row"><div class="infra-key">cipher-panel.me</div><div class="infra-val">ACTIVE — Cloudflare — nginx (different backend)</div></div>
+        <div class="infra-row"><div class="infra-key">Creator</div><div class="infra-val">Authentic / authentic777 (Discord: 1072311313080004648)</div></div>
+        <div class="infra-row"><div class="infra-key">Discord</div><div class="infra-val">discord.gg/ciphercorp</div></div>
+        <div class="infra-row"><div class="infra-key">Confirmed</div><div class="infra-val">Feb 4, 2026 — called Blum "Cipher copy-pasta"</div></div>
+    </div>
+
+    <div class="infra-card">
+        <h3>Direct IP Servers (UAB Esnet, Vilnius, Lithuania)</h3>
+        <div class="infra-row"><div class="infra-key">185.80.128.35</div><div class="infra-val live">Apache — Stolen file hosting</div></div>
+        <div class="infra-row"><div class="infra-key">185.80.128.36</div><div class="infra-val">Apache — Default page</div></div>
+        <div class="infra-row"><div class="infra-key">185.80.130.168</div><div class="infra-val live">Express.js — GFX Panel + Port 3000 open</div></div>
+        <div class="infra-row"><div class="infra-key">Abuse contact</div><div class="infra-val">abuse@vpsnet.lt</div></div>
+    </div>
+
+    <div class="infra-card">
+        <h3>Backup C2 Domains (Serve Payloads)</h3>
+        <div class="infra-row"><div class="infra-key">2ns3.net</div><div class="infra-val live">AWS 13.248.213.45 — bertJJ: 200</div></div>
+        <div class="infra-row"><div class="infra-key">jking.lt</div><div class="infra-val live">Cloudflare — Full panel + payloads</div></div>
+        <div class="infra-row"><div class="infra-key">giithub.net</div><div class="infra-val dead">Cloudflare — 522 error</div></div>
+    </div>
+
+    <div class="infra-card">
+        <h3>Attacker Identity</h3>
+        <div class="infra-row"><div class="infra-key">Admin Discord #1</div><div class="infra-val">393666265253937152 (~2018 account)</div></div>
+        <div class="infra-row"><div class="infra-key">Admin Discord #2</div><div class="infra-val">1368690772123062292 (~May 2025 account)</div></div>
+        <div class="infra-row"><div class="infra-key">OAuth App</div><div class="infra-val">1444110004402655403 (name: "blum")</div></div>
+        <div class="infra-row"><div class="infra-key">BTC Wallet</div><div class="infra-val">bc1q2wd7y6cp5dukcj3krs8rgpysa9ere0rdre7hhj</div></div>
+        <div class="infra-row"><div class="infra-key">LTC Wallet</div><div class="infra-val">LSxKJm6SpdExCACUcFTUADcvZgea65AaWo (76.53 LTC, 89 TX)</div></div>
+        <div class="infra-row"><div class="infra-key">Revenue</div><div class="infra-val">$10,000-$12,000+ confirmed crypto</div></div>
+        <div class="infra-row"><div class="infra-key">Registrar</div><div class="infra-val">Namecheap (all domains)</div></div>
+    </div>
+</div>
+
+<!-- LOG TAB -->
+<div id="tab-log" class="content">
+    <div class="section-title">Real-Time Event Log</div>
+    <p style="font-size:12px;color:#8b949e;margin-bottom:10px;">All Socket.IO events from the C2 connection</p>
+    <div id="log"></div>
+</div>
+
+<script>
+var allServers = [];
+var playerData = [];
+var sortField = "playercount";
+var sortDir = -1;
+var socket = null;
+
+function showTab(name) {
+    document.querySelectorAll(".content").forEach(function(el) { el.classList.remove("active"); });
+    document.querySelectorAll(".tab").forEach(function(el) { el.classList.remove("active"); });
+    document.getElementById("tab-" + name).classList.add("active");
+    event.target.classList.add("active");
+}
+
+function log(msg) {
+    var d = document.getElementById("log");
+    var line = document.createElement("div");
+    line.textContent = new Date().toLocaleTimeString() + " " + msg;
+    d.insertBefore(line, d.firstChild);
+    if (d.children.length > 200) d.removeChild(d.lastChild);
+}
+
+function connect() {
+    socket = io("https://blum-panel.me", {
+        transports: ["websocket"],
+        timeout: 15000,
+        forceNew: true
+    });
+
+    socket.on("connect", function() {
+        document.getElementById("status").className = "connected";
+        document.getElementById("status").textContent = "Connected to C2 — SID: " + socket.id;
+        log("Connected to blum-panel.me");
+
+        socket.emit("registerServer", {
+            apiKey: "bertJJ",
+            serverName: "JGN Investigation",
+            players: [],
+            resources: ["es_extended"],
+            maxPlayers: 64,
+            serverIp: "10.0.0.1"
+        });
+        log("Registered as server");
+
+        setTimeout(requestData, 2000);
+        setInterval(requestData, 30000);
+        setInterval(function() {
+            socket.emit("heartbeat", {players:[],resources:["es_extended"],maxPlayers:64});
+        }, 30000);
+    });
+
+    socket.onAny(function(event) {
+        if (event === "connect" || event === "disconnect" || event === "connect_error") return;
+        var args = Array.prototype.slice.call(arguments, 1);
+        var raw = JSON.stringify(args);
+        if (raw === "[[]]" || raw.length < 10) return;
+
+        log("EVENT: " + event + " (" + raw.length + " bytes)");
+
+        // Server list
+        try {
+            var parsed = Array.isArray(args[0]) ? args[0] : args;
+            if (Array.isArray(parsed) && parsed.length > 100 && parsed[0] && parsed[0].servername) {
+                allServers = parsed;
+                log("Captured " + parsed.length + " servers");
+                updateOverview();
+                renderServers();
+                renderCustomers();
+                document.querySelector('.tab:nth-child(2)').textContent = "Servers (" + parsed.length + ")";
+            }
+        } catch(e) {}
+
+        // Player data
+        try {
+            var parsed2 = Array.isArray(args[0]) ? args[0] : args;
+            if (Array.isArray(parsed2) && parsed2.length > 0 && parsed2[0] && parsed2[0].players) {
+                parsed2.forEach(function(entry) {
+                    if (entry.players && entry.players.length > 0) {
+                        var existing = playerData.findIndex(function(p) { return p.serverId === entry.serverId; });
+                        if (existing >= 0) playerData[existing] = entry;
+                        else playerData.push(entry);
+                    }
+                });
+                log("Player data: " + playerData.length + " servers");
+                renderPlayers();
+            }
+        } catch(e) {}
+    });
+
+    socket.on("connect_error", function(e) {
+        document.getElementById("status").className = "disconnected";
+        document.getElementById("status").textContent = "Disconnected: " + e.message;
+        log("ERROR: " + e.message);
+    });
+}
+
+function requestData() {
+    log("Requesting data...");
+    ["servers:list","servers:list:all","getServers","getAllServers",
+     "getConnectedServers","listServers","fetchServers","serverList",
+     "connectedServers"].forEach(function(evt) {
+        socket.emit(evt, {page:1, limit:500});
+    });
+
+    // Request players from active servers
+    setTimeout(function() {
+        if (allServers.length > 0) {
+            var active = allServers
+                .filter(function(s) { return s.playercount > 0; })
+                .sort(function(a,b) { return b.playercount - a.playercount; })
+                .slice(0, 15);
+            
+            active.forEach(function(s) {
+                socket.emit("getServerPlayers", {serverId: s.serverId});
+                socket.emit("requestPlayers", {serverId: s.serverId});
+            });
+            log("Requested players from " + active.length + " servers");
+        }
+    }, 5000);
+}
+
+function refreshPlayers() {
+    if (!socket || !socket.connected) return;
+    var active = allServers
+        .filter(function(s) { return s.playercount > 0; })
+        .sort(function(a,b) { return b.playercount - a.playercount; })
+        .slice(0, 20);
+    
+    active.forEach(function(s) {
+        socket.emit("getServerPlayers", {serverId: s.serverId});
+        socket.emit("requestPlayers", {serverId: s.serverId});
+    });
+    log("Refreshing players from " + active.length + " servers");
+}
+
+function updateOverview() {
+    var tp = 0, mc = 0, active = 0, pcs = 0;
+    var keys = {}, fws = {}, oss = {}, locs = {};
+
+    allServers.forEach(function(s) {
+        tp += s.playercount || 0;
+        mc += s.maxcount || 0;
+        if (s.playercount > 0) active++;
+        if (s.isPersonalPC) pcs++;
+        var k = s.apiKey || "?";
+        keys[k] = (keys[k]||0) + 1;
+        var fw = s.framework || "?";
+        fws[fw] = (fws[fw]||0) + 1;
+        var os = s.osEnvironment || "?";
+        oss[os] = (oss[os]||0) + 1;
+        var loc = s.locale || "?";
+        locs[loc] = (locs[loc]||0) + 1;
+    });
+
+    document.getElementById("s-total").textContent = allServers.length.toLocaleString();
+    document.getElementById("s-players").textContent = tp.toLocaleString();
+    document.getElementById("s-active").textContent = active.toLocaleString();
+    document.getElementById("s-capacity").textContent = mc.toLocaleString();
+    document.getElementById("s-customers").textContent = Object.keys(keys).length;
+    document.getElementById("s-pcs").textContent = pcs;
+
+    renderChart("chart-fw", fws, allServers.length);
+    renderChart("chart-keys", keys, allServers.length, 10);
+    renderChart("chart-os", oss, allServers.length);
+    renderChart("chart-locale", locs, allServers.length, 10);
+}
+
+function renderChart(id, data, total, limit) {
+    var el = document.getElementById(id);
+    var sorted = Object.entries(data).sort(function(a,b) { return b[1]-a[1]; });
+    if (limit) sorted = sorted.slice(0, limit);
+    var max = sorted[0] ? sorted[0][1] : 1;
+    
+    el.innerHTML = "";
+    sorted.forEach(function(item) {
+        var pct = (item[1] / max * 100).toFixed(0);
+        var row = document.createElement("div");
+        row.className = "chart-row";
+        row.innerHTML = '<div class="chart-label">' + item[0] + '</div>' +
+            '<div class="chart-bar" style="width:' + pct + '%;max-width:300px"></div>' +
+            '<div class="chart-value">' + item[1] + '</div>';
+        el.appendChild(row);
+    });
+}
+
+function renderServers() {
+    var filtered = getFilteredServers();
+    filtered.sort(function(a,b) {
+        var va = a[sortField] || "", vb = b[sortField] || "";
+        if (typeof va === "number") return (vb - va) * sortDir;
+        return String(va).localeCompare(String(vb)) * sortDir;
+    });
+
+    document.getElementById("showing-count").textContent = filtered.length;
+    var tbody = document.getElementById("server-tbody");
+    tbody.innerHTML = "";
+
+    filtered.forEach(function(s, i) {
+        var tr = document.createElement("tr");
+        var name = (s.servername || "?").replace(/\^[0-9]/g, "");
+        var pc = s.playercount || 0;
+        var pclass = pc > 20 ? "hot" : pc > 5 ? "warm" : "cold";
+        var fwClass = s.framework === "ESX" ? "badge-esx" : s.framework === "QBCore" ? "badge-qb" : "badge-vrp";
+        var osClass = s.osEnvironment === "Windows" ? "badge-win" : "badge-linux";
+
+        tr.innerHTML =
+            "<td>" + (i+1) + "</td>" +
+            "<td title='" + name.replace(/'/g,"") + "'>" + name.substring(0,60) + "</td>" +
+            "<td>[REDACTED]</td>" +
+            "<td class='" + pclass + "'>" + pc + "/" + (s.maxcount||0) + "</td>" +
+            "<td><span class='badge " + fwClass + "'>" + (s.framework||"?") + "</span></td>" +
+            "<td><span class='badge " + osClass + "'>" + (s.osEnvironment||"?") + "</span></td>" +
+            "<td>" + (s.apiKey || "?") + "</td>" +
+            "<td>" + (s.serverUptime || "?") + "</td>" +
+            "<td style='font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis'>[REDACTED]</td>" +
+            "<td>" + (s.locale || "?") + "</td>";
+        tbody.appendChild(tr);
+    });
+}
+
+function getFilteredServers() {
+    var q = (document.getElementById("server-search").value || "").toLowerCase();
+    if (!q) return allServers.slice();
+    return allServers.filter(function(s) {
+        return (s.servername||"").toLowerCase().indexOf(q) >= 0 ||
+               (s.apiKey||"").toLowerCase().indexOf(q) >= 0 ||
+               (s.framework||"").toLowerCase().indexOf(q) >= 0 ||
+               (s.locale||"").toLowerCase().indexOf(q) >= 0;
+    });
+}
+
+function filterServers() { renderServers(); }
+
+function sortServers(field) {
+    if (sortField === field) sortDir *= -1;
+    else { sortField = field; sortDir = -1; }
+    renderServers();
+}
+
+function renderCustomers() {
+    var keys = {};
+    allServers.forEach(function(s) {
+        var k = s.apiKey || "?";
+        if (!keys[k]) keys[k] = { servers: 0, players: 0, fws: {} };
+        keys[k].servers++;
+        keys[k].players += s.playercount || 0;
+        var fw = s.framework || "?";
+        keys[k].fws[fw] = (keys[k].fws[fw]||0) + 1;
+    });
+
+    var sorted = Object.entries(keys).sort(function(a,b) { return b[1].servers - a[1].servers; });
+    var tbody = document.getElementById("customer-tbody");
+    tbody.innerHTML = "";
+
+    sorted.forEach(function(item) {
+        var tr = document.createElement("tr");
+        var topFw = Object.entries(item[1].fws).sort(function(a,b){return b[1]-a[1];})[0];
+        var rev = item[1].servers > 100 ? "Ultima (139.99 EUR)" : "Basic (59.99 EUR/mo)";
+        tr.innerHTML = "<td>" + item[0] + "</td>" +
+            "<td>" + item[1].servers + "</td>" +
+            "<td class='" + (item[1].players > 10 ? "hot" : "cold") + "'>" + item[1].players + "</td>" +
+            "<td>" + (topFw ? topFw[0] : "?") + "</td>" +
+            "<td style='color:#8b949e'>" + rev + "</td>";
+        tbody.appendChild(tr);
+    });
+}
+
+function renderPlayers() {
+    var container = document.getElementById("player-list");
+    container.innerHTML = "";
+    var totalPlayers = 0;
+    var realIPs = 0;
+    var discords = 0;
+
+    playerData.forEach(function(entry) {
+        var card = document.createElement("div");
+        card.className = "player-card";
+        
+        var serverName = "Unknown Server";
+        var match = allServers.find(function(s) { return s.serverId === entry.serverId; });
+        if (match) serverName = (match.servername || "?").replace(/\^[0-9]/g, "").substring(0, 60);
+
+        var html = "<h4>" + serverName + " (" + entry.players.length + " players)</h4>";
+        
+        entry.players.forEach(function(p) {
+            totalPlayers++;
+            var ip = p.ip || "?";
+            if (ip !== "127.0.0.1" && ip !== "?") realIPs++;
+            if (p.discord && p.discord !== "unknown") discords++;
+            
+            html += '<div class="player-row">' +
+                '<span style="color:#ffa500">' + (p.name||"?") + '</span>' +
+                ' | IP: <span style="color:#ff4141">[REDACTED]</span>' +
+                ' | Discord: <span style="color:#58a6ff">[REDACTED]</span>' +
+                ' | ID: <span style="color:#bc8cff">[REDACTED]</span>' +
+                '</div>';
+        });
+
+        card.innerHTML = html;
+        container.appendChild(card);
+    });
+
+    document.getElementById("p-total").textContent = totalPlayers;
+    document.getElementById("p-servers").textContent = playerData.length;
+    document.getElementById("p-ips").textContent = realIPs;
+    document.getElementById("p-discords").textContent = discords;
+}
+
+// Start
+connect();
+</script>
+</body>
+</html>

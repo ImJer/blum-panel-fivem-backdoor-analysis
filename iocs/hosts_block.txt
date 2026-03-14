@@ -31,3 +31,5 @@
 0.0.0.0 www.cipher-panel.me
 0.0.0.0 9ns1.com
 0.0.0.0 www.9ns1.com
+0.0.0.0 gfxpanel.org
+0.0.0.0 kutingplays.com

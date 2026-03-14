@@ -1,0 +1,14 @@
+{
+  "total_players_captured": 289,
+  "real_ips_exposed": 289,
+  "discord_ids_exposed": 286,
+  "note": "Raw PII redacted from public release. Full data available to law enforcement.",
+  "fields_exposed_per_player": [
+    "name",
+    "real_ip_address",
+    "discord_id",
+    "steam_or_license_identifier",
+    "server_id"
+  ],
+  "capture_time": "2026-03-14T08:36:00Z"
+}

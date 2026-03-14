@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- TODO: Set the document title to the name of your application -->
+    <title>GFX PANEL</title>
+    <meta name="description" content="Gfx" />
+    <meta name="author" content="Gfx" />
+
+    <!-- TODO: Update og:title to match your application name -->
+    
+    <meta property="og:description" content="Gfx" />
+    <meta property="og:type" content="website" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@Gfx" />
+    <meta property="og:title" content="GFX PANEL">
+  <meta name="twitter:title" content="GFX PANEL">
+  <link rel="icon" type="image/png" href="https://storage.googleapis.com/gpt-engineer-file-uploads/eSi92A9tMBTQWYu6OPvMFhyFiy72/uploads/1770591906101-gfx_-_Copy.png">
+  <script type="module" crossorigin src="/assets/index-B62S1OtC.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-B-rnh67k.css">
+</head>
+
+  <body>
+    <div id="root"></div>
+    <script>
+      // Disable right-click context menu
+      document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+      // Disable devtools keyboard shortcuts
+      document.addEventListener('keydown', function(e) {
+        // F12
+        if (e.key === 'F12') { e.preventDefault(); return false; }
+        // Ctrl+Shift+I / Cmd+Option+I
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'i')) { e.preventDefault(); return false; }
+        // Ctrl+Shift+J / Cmd+Option+J
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'J' || e.key === 'j')) { e.preventDefault(); return false; }
+        // Ctrl+Shift+C / Cmd+Option+C
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); return false; }
+        // Ctrl+U / Cmd+U (view source)
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'U' || e.key === 'u')) { e.preventDefault(); return false; }
+      });
+
+      // Devtools detection + debugger pause loop
+      (function() {
+        setInterval(function() {
+          var start = performance.now();
+          debugger;
+          var end = performance.now();
+          // If debugger took >100ms, devtools is likely open - keep pausing
+          if (end - start > 100) {
+            while(true) { debugger; }
+          }
+        }, 1000);
+      })();
+    </script>
+  </body>
+</html>
