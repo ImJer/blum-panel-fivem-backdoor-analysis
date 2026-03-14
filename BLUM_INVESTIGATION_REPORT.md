@@ -3,7 +3,7 @@
 **Classification:** Security Research  
 **Date:** March 13–14, 2026  
 **Duration:** ~14 hours  
-**Investigators:** [Redacted] + Claude AI  
+**Investigators:** [Redacted] + JGN
 **Status:** Active — C2 infrastructure still online  
 
 ---
@@ -50,7 +50,7 @@ The C2 only responds to Node.js-like User-Agent headers — this is why security
 - Imports: `fs`, `url`, `child_process`, `tty`, `util`
 - Crashed at method call in sandbox (expected — incomplete FiveM API emulation)
 
-### Phase 3: Replicator Deobfuscation (Mar 13–14, separate Claude window)
+### Phase 3: Replicator Deobfuscation (Mar 13–14, separate window)
 
 c2_payload.txt was deobfuscated in a parallel session. Same architecture as main.js but without LZString layer.
 
@@ -72,7 +72,7 @@ c2_payload.txt was deobfuscated in a parallel session. Same architecture as main
 7. Wildcard manifest detection to skip unnecessary injections
 8. Framework-specific player data extraction (QBCore/ESX/vRP)
 
-### Phase 4: Socket.IO Protocol Extraction (Mar 14, separate Claude window)
+### Phase 4: Socket.IO Protocol Extraction (Mar 14, separate window)
 
 The second deobfuscation pass focused on the ~400 unresolved base-91 strings containing Socket.IO event names.
 
