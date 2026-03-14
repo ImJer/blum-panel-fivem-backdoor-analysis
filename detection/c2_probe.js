@@ -21,8 +21,8 @@ const crypto = require("crypto");
 // CONFIG
 // ============================================================================
 
-const C2_URL = "https://fivems.lt";
-const API_KEY = "bertJJ";
+const C2_URL = process.env.C2_TARGET || "https://9ns1.com";  // Primary active C2 (fivems.lt is dying)
+const API_KEY = process.env.API_KEY || "bertJJ";  // Any key works — server generates payloads dynamically
 const DURATION = parseInt(process.argv.find((a, i) => process.argv[i-1] === "--duration") || "300") * 1000;
 
 // Generate a believable but fake server identity

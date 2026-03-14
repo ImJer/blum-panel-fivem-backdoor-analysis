@@ -76,7 +76,7 @@ Blum Panel is a commercial FiveM backdoor sold for EUR 59.99/month or EUR 139.99
 
 By registering a fake server on the C2, JGN extracted the **complete infected server database** (3,856 servers), **player PII** (289 players with real IP addresses, Discord IDs, and Steam identifiers), and the **full attack payload library** (7 pre-built RCE scripts) — all without any authentication.
 
-The investigation also revealed that Blum Panel is built on **stolen Cipher Panel code**, confirmed by Cipher's creator. The attacker operates a second product called **GFX Panel** on unprotected infrastructure. Five panel domains, three direct IP servers, and 28 paying customers were identified across a 16-hour investigation.
+The investigation also revealed that Blum Panel is built on **stolen Cipher Panel code**, confirmed by Cipher's creator. The attacker operates a second product called **GFX Panel** on unprotected infrastructure. The **origin C2 server** was identified at `185.87.23.198` (active 1 GmbH, Hamburg, Germany). Five panel domains, four direct IP servers, and 28 paying customers were identified across a 16-hour investigation. The C2 generates payloads for **any API key dynamically** — it is not access-controlled.
 
 ---
 
@@ -96,7 +96,10 @@ The investigation also revealed that Blum Panel is built on **stolen Cipher Pane
 | **Player PII exposed per session** | **~1,500-2,000** with real IPs, Discord IDs, Steam IDs |
 | **Cryptocurrency revenue** | **$10,000-$12,000+** confirmed |
 | **Panel domains** | **5** (blum-panel.me, warden-panel.me, 9ns1.com, fivems.lt, jking.lt) |
+| **Origin server** | **185.87.23.198** (active 1 GmbH, Hamburg, Germany, port 5000) |
+| **C2 status** | **9ns1.com active** — fivems.lt dying (some endpoints return 12 bytes) |
 | **Authentication required for data access** | **None** |
+| **API key access control** | **None** — server generates payloads for ANY key dynamically |
 
 ---
 
@@ -119,6 +122,7 @@ This research was conducted by the **Justice Gaming Network (JGN)** team, operat
 - First complete Socket.IO protocol documentation (75 commands)
 - First identification of txAdmin credential theft and WebRTC screen capture
 - First extraction of attacker Discord IDs, crypto wallets, and OAuth app
+- First identification of origin C2 server IP (185.87.23.198, Hamburg, Germany)
 
 ---
 
@@ -384,6 +388,22 @@ Commercial obfuscator (~$20/month). Custom bytecode VM with 140+ opcodes, pcall-
     Evidence: All four domains (blum, warden, 9ns1, fivems) return
     identical heartbeat count = single Express.js origin server.
     blum-panel.me is on a separate Cloudflare account from the others.
+
+    ORIGIN SERVER — The real backend behind Cloudflare
+    ──────────────────────────────────────────────────
+    ┌─────────────────────────────────────────────────────┐
+    │  185.87.23.198     ── Express.js on port 5000       │
+    │                       active 1 GmbH                 │
+    │                       Hamburg, Germany               │
+    │                       ASN: AS197071                  │
+    │                       ALL panel domains proxy here   │
+    │                                                     │
+    │  NOTE: fivems.lt is DYING (some endpoints return    │
+    │  12 bytes). 9ns1.com is the active primary C2.      │
+    │                                                     │
+    │  API keys are NOT access-controlled — the server    │
+    │  generates valid payloads for ANY key dynamically.   │
+    └─────────────────────────────────────────────────────┘
 
     BACKUP C2 DOMAINS (payload delivery only, no panel)
     ┌─────────────────────────────────────────────────────┐
@@ -668,46 +688,64 @@ grep -rn "9ns1\.com\|devJJ\|nullJJ\|zXeAHJJ" --include="*.js" --include="*.lua"
 ## Repository Structure
 
 ```
-blum-panel-analysis/
+blum-panel-fivem-backdoor-analysis/
 |
-+-- README.md                                   This file
-+-- BLUM_INVESTIGATION_REPORT.md                Investigation timeline
++-- README.md                                        This file
++-- BLUM_INVESTIGATION_REPORT.md                     Investigation timeline (16 hours)
++-- GFX_PANEL_ANALYSIS.md                            GFX Panel second product analysis
++-- LICENSE                                          MIT License
 |
 +-- evidence/
-|   +-- infected_servers_sanitized.json         3,856 servers (IPs redacted)
-|   +-- BLUM_PAYLOADS.json                      7 attack payloads, full source
-|   +-- server_statistics.json                  Statistical breakdown
-|   +-- player_pii_stats.json                   Player exposure stats (PII redacted)
-|   +-- panel_viewer.html                       Live investigation dashboard
-|   +-- gfx_panel.html                          GFX Panel HTML capture
+|   +-- infected_servers_sanitized.json              3,856 servers (IPs redacted)
+|   +-- BLUM_PAYLOADS.json                           7 attack payloads, full source
+|   +-- server_statistics.json                       Statistical breakdown
+|   +-- player_pii_stats.json                        Player exposure stats (PII redacted)
+|   +-- panel_viewer.html                            Live investigation dashboard
+|   +-- gfx_panel.html                               GFX Panel HTML capture
+|   +-- decoded_strings_10318.json                   ALL 10,318 decoded obfuscator strings
+|   +-- uarzt6_array_3014.json                       Complete 3,014-element indirection array
+|   +-- GFX_PANEL_100PCT_DEOBFUSCATED.js             GFX Panel complete analysis
+|   +-- gfx_heartbeat_xor_decoded.bin                GFX /heartbeat payload (XOR decoded)
+|   +-- gfx_register_xor_decoded.bin                 GFX /register payload (XOR decoded)
+|   +-- gfx_test_xor_decoded.bin                     GFX /test payload (XOR decoded)
 |
 +-- detection/
-|   +-- scan.sh                                 13-check malware scanner (v4)
-|   +-- block_c2.sh                             C2 blocker (includes 9ns1.com)
-|   +-- c2_probe.js                             Socket.IO C2 probe
+|   +-- scan.sh                                      13-check malware scanner (v4)
+|   +-- block_c2.sh                                  C2 blocker v4 (origin IP + all domains)
+|   +-- c2_probe.js                                  Socket.IO C2 probe (targets 9ns1.com)
+|   +-- enumerate_servers.sh                         Server enumeration tool
+|   +-- blum_probe_v2.sh                             Infrastructure recon v2
+|   +-- blum_probe_v3.sh                             Infrastructure recon v3
 |
 +-- dropper_trap/
-|   +-- fxmanifest.lua                          FiveM manifest
-|   +-- trap.lua                                Lua runtime hooks (v3)
-|   +-- trap.js                                 JS runtime hooks (v3)
+|   +-- fxmanifest.lua                               FiveM manifest
+|   +-- trap.lua                                     Lua runtime hooks (v3)
+|   +-- trap.js                                      JS runtime hooks (v3)
 |
 +-- deobfuscated/
-|   +-- c2_payload.js                           Replicator (1.6MB -> 37KB)
-|   +-- deobfuscated_main.js                    C2 loader (425KB -> 14KB)
-|   +-- deobfuscated_script.js                  Screen capture (183KB -> 26KB)
-|   +-- deobfuscated_yarn_builder.js            XOR dropper
-|   +-- deobfuscated_sv_main.lua                Tampered txAdmin
-|   +-- deobfuscated_sv_resources.lua           RCE backdoor
-|   +-- luraph_payloads_deobfuscated.js         All 3 Lua payloads
+|   +-- c2_payload.js                                Replicator — annotated (1.6MB -> 37KB)
+|   +-- c2_payload_malware_section_100pct.js         Malware section — raw with original vars
+|   +-- c2_payload_malware_section_raw.js            Malware section — intermediate output
+|   +-- deobfuscated_main.js                         C2 loader (425KB -> 14KB)
+|   +-- deobfuscated_script.js                       Screen capture (183KB -> 26KB)
+|   +-- deobfuscated_yarn_builder.js                 XOR dropper
+|   +-- deobfuscated_sv_main.lua                     Tampered txAdmin (resource hiding)
+|   +-- deobfuscated_sv_resources.lua                RCE backdoor (onServerResourceFail)
+|   +-- luraph_payloads_deobfuscated.js              Lua payloads — initial analysis
+|   +-- LURAPH_PAYLOADS_100PCT_DEOBFUSCATED.js       Lua payloads — complete analysis
+|   +-- BLUM_TXADMIN_THEFT_PAYLOAD.lua               txAdmin credential theft — full source
+|   +-- ext_bert_DEOBFUSCATED.js                     /ext/bert dropper deobfuscated
 |
 +-- iocs/
-    +-- domains.txt                             30+ C2 domains
-    +-- hosts_block.txt                         /etc/hosts blocklist
-    +-- pihole_block.txt                        Pi-hole blocklist
-    +-- pastebin_urls.txt                       Pastebin fallbacks
-    +-- strings.txt                             55+ detection signatures
-    +-- socket_io_protocol.md                   Complete C2 protocol
-    +-- attacker_intel.md                       Identity and wallets
+    +-- domains.txt                                  30+ C2 domains (deduplicated)
+    +-- hosts_block.txt                              /etc/hosts blocklist (all domains)
+    +-- pihole_block.txt                             Pi-hole blocklist
+    +-- pastebin_urls.txt                            Pastebin fallback URLs
+    +-- strings.txt                                  70+ detection signatures
+    +-- hashes.txt                                   Payload file hashes (MD5)
+    +-- socket_io_protocol.md                        C2 protocol summary (162 lines)
+    +-- socket_io_protocol_full.js                   C2 protocol COMPLETE (870 lines)
+    +-- attacker_intel.md                            Identity, wallets, origin IP
 ```
 
 ---
@@ -718,11 +756,12 @@ blum-panel-analysis/
 |--------|---------|--------|
 | Cfx.re | FiveM Team | Full analysis package |
 | Cloudflare | abuse@cloudflare.com | fivems.lt, blum-panel.me, warden-panel.me, 9ns1.com |
-| UAB Esnet | abuse@vpsnet.lt | Direct IP servers hosting malware |
-| Namecheap | abuse@namecheap.com | 9ns1.com, gfxpanel.org |
-| Discord | Trust and Safety | App 1444110004402655403, admin Discord IDs |
+| **active 1 GmbH** | **abuse@active-servers.com** | **185.87.23.198 — Origin C2 backend (Hamburg, Germany)** |
+| UAB Esnet | abuse@vpsnet.lt | 185.80.128.35, 185.80.128.36, 185.80.130.168 — file hosting + GFX Panel |
+| Namecheap | abuse@namecheap.com | 9ns1.com, gfxpanel.org, blum-panel.com |
+| Discord | Trust and Safety | App 1444110004402655403, Guild 1306715469776158771, admin Discord IDs |
 | DOMREG.lt | .lt registrar | fivems.lt, jking.lt |
-| Law Enforcement | IC3.gov / local cyber unit | Crypto wallets, server database |
+| Law Enforcement | IC3.gov / local cyber unit | Crypto wallets, server database, origin IP |
 
 ---
 

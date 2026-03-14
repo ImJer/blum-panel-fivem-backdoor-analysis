@@ -1,9 +1,13 @@
 #!/bin/bash
 # ============================================================================
-# BLUM PANEL MALWARE SCANNER v3
+# BLUM PANEL MALWARE SCANNER v4
 # ============================================================================
 # Scans a FiveM server for all known Blum Panel / bertjj / miauss artifacts.
 # Run from the server root directory.
+# Changes from v3:
+#   - Fixed check numbering (1-13 sequential)
+#   - Added 9ns1.com, cipher-panel.me, blum-panel.com to C2 domain checks
+#   - Added Cipher Panel domains to detection
 # ============================================================================
 
 RED='\033[0;31m'
@@ -22,7 +26,7 @@ FOUND=0
 SCAN_DIR="${1:-.}"
 
 # ---------- 1. XOR DROPPER PATTERN ----------
-echo -e "${CYN}[1/8] Scanning for XOR dropper pattern...${NC}"
+echo -e "${CYN}[1/13] Scanning for XOR dropper pattern...${NC}"
 hits=$(grep -rn "String.fromCharCode(a\[i\]\^k)" --include="*.js" "$SCAN_DIR" 2>/dev/null)
 if [ -n "$hits" ]; then
     echo -e "${RED}  FOUND — XOR dropper files:${NC}"
@@ -33,8 +37,8 @@ else
 fi
 
 # ---------- 2. ATTACKER STRINGS ----------
-echo -e "${CYN}[2/8] Scanning for attacker identifiers...${NC}"
-hits=$(grep -rn "bertjj\|bertJJ\|miauss\|miausas\|fivems\.lt\|VB8mdVjrzd\|blum-panel\|warden-panel\|ggWP" --include="*.js" --include="*.lua" --include="*.cfg" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|SCANNER\|scan.sh\|block_c2\|README\|\.md$")
+echo -e "${CYN}[2/13] Scanning for attacker identifiers...${NC}"
+hits=$(grep -rn "bertjj\|bertJJ\|miauss\|miausas\|fivems\.lt\|9ns1\.com\|VB8mdVjrzd\|blum-panel\|warden-panel\|cipher-panel\|gfxpanel\|ggWP" --include="*.js" --include="*.lua" --include="*.cfg" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|SCANNER\|scan.sh\|block_c2\|README\|\.md$")
 if [ -n "$hits" ]; then
     echo -e "${RED}  FOUND — Attacker strings:${NC}"
     echo "$hits" | head -20 | while read line; do echo -e "  ${RED}$line${NC}"; done
@@ -44,7 +48,7 @@ else
 fi
 
 # ---------- 3. TXADMIN TAMPERING ----------
-echo -e "${CYN}[3/8] Scanning for txAdmin tampering...${NC}"
+echo -e "${CYN}[3/13] Scanning for txAdmin tampering...${NC}"
 hits=$(grep -rn "RESOURCE_EXCLUDE\|isExcludedResource\|onServerResourceFail\|helpEmptyCode\|JohnsUrUncle\|txadmin:js_create" --include="*.lua" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|scan.sh\|README")
 if [ -n "$hits" ]; then
     echo -e "${RED}  FOUND — txAdmin backdoor indicators:${NC}"
@@ -55,7 +59,7 @@ else
 fi
 
 # ---------- 3b. TXADMIN BACKDOOR ADMIN ACCOUNT ----------
-echo -e "${CYN}[3b/8] Checking txAdmin for backdoor admin 'JohnsUrUncle'...${NC}"
+echo -e "${CYN}[4/13] Checking txAdmin for backdoor admin 'JohnsUrUncle'...${NC}"
 admin_found=0
 find "$SCAN_DIR" -name "admins.json" -o -name "*.json" -path "*txData*" -o -name "*.json" -path "*txAdmin*" 2>/dev/null | while read f; do
     if grep -qi "JohnsUrUncle\|johnsuruncle" "$f" 2>/dev/null; then
@@ -67,7 +71,7 @@ done
 if [ "$admin_found" -eq 0 ]; then echo -e "  ${GRN}Clean${NC}"; fi
 
 # ---------- 3c. TXADMIN FILES — INDIVIDUAL CHECK ----------
-echo -e "${CYN}[3c/8] Checking txAdmin files individually...${NC}"
+echo -e "${CYN}[5/13] Checking txAdmin files individually...${NC}"
 find "$SCAN_DIR" -name "cl_playerlist.lua" -path "*/monitor/*" 2>/dev/null | while read f; do
     if grep -q "helpEmptyCode" "$f" 2>/dev/null; then
         echo -e "${RED}  INFECTED: $f — client RCE backdoor (helpEmptyCode)${NC}"
@@ -97,7 +101,7 @@ find "$SCAN_DIR" -name "sv_resources.lua" -path "*/monitor/*" 2>/dev/null | whil
 done
 
 # ---------- 4. KNOWN DROPPER FILENAMES IN SUSPICIOUS LOCATIONS ----------
-echo -e "${CYN}[4/8] Scanning for dropper files in suspicious paths...${NC}"
+echo -e "${CYN}[6/13] Scanning for dropper files in suspicious paths...${NC}"
 for name in babel_config.js jest_mock.js mock_data.js webpack_bundle.js env_backup.js cache_old.js build_cache.js vite_temp.js eslint_rc.js jest_setup.js test_utils.js utils_lib.js helper_functions.js sync_worker.js queue_handler.js session_store.js hook_system.js patch_update.js; do
     finds=$(find "$SCAN_DIR" -name "$name" -path "*/server/*" -o -name "$name" -path "*/modules/*" -o -name "$name" -path "*/node_modules/.cache/*" -o -name "$name" -path "*/middleware/*" -o -name "$name" -path "*/dist/*" 2>/dev/null)
     if [ -n "$finds" ]; then
@@ -114,8 +118,8 @@ done
 echo -e "  ${GRN}Done${NC}"
 
 # ---------- 5. C2 DOMAIN CONNECTIONS ----------
-echo -e "${CYN}[5/8] Checking for C2 domains in code...${NC}"
-C2_DOMAINS="fivems\.lt\|0xchitado\.com\|giithub\.net\|fivemgtax\.com\|warden-panel\.me\|bhlool\.com\|flowleakz\.org\|z1lly\.org\|l00x\.org\|monloox\.com\|noanimeisgay\.com\|2ns3\.net\|5mscripts\.net\|2312321321321213\.com"
+echo -e "${CYN}[7/13] Checking for C2 domains in code...${NC}"
+C2_DOMAINS="9ns1\.com\|fivems\.lt\|0xchitado\.com\|giithub\.net\|fivemgtax\.com\|warden-panel\.me\|bhlool\.com\|flowleakz\.org\|z1lly\.org\|l00x\.org\|monloox\.com\|noanimeisgay\.com\|2ns3\.net\|5mscripts\.net\|2312321321321213\.com\|cipher-panel\.me\|ciphercheats\.com\|blum-panel\.com\|blum-panel\.me"
 hits=$(grep -rn "$C2_DOMAINS" --include="*.js" --include="*.lua" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|scan.sh\|block_c2\|README\|\.md$\|\.txt$")
 if [ -n "$hits" ]; then
     echo -e "${RED}  FOUND — C2 domain references:${NC}"
@@ -126,7 +130,7 @@ else
 fi
 
 # ---------- 6. LZSTRING / OBFUSCATION MARKERS ----------
-echo -e "${CYN}[6/8] Scanning for obfuscation markers...${NC}"
+echo -e "${CYN}[8/13] Scanning for obfuscation markers...${NC}"
 hits=$(grep -rn "decompressFromUTF16\|\\\\u15E1\|aga\[0x\|UARZT6\[" --include="*.js" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|scan.sh\|README\|deobfuscated")
 if [ -n "$hits" ]; then
     echo -e "${RED}  FOUND — Obfuscation markers:${NC}"
@@ -137,7 +141,7 @@ else
 fi
 
 # ---------- 7. FXMANIFEST INJECTION ----------
-echo -e "${CYN}[7/8] Checking fxmanifest.lua files for suspicious entries...${NC}"
+echo -e "${CYN}[9/13] Checking fxmanifest.lua files for suspicious entries...${NC}"
 find "$SCAN_DIR" -name "fxmanifest.lua" 2>/dev/null | while read manifest; do
     suspicious=$(grep -n "node_modules/\.\|\.cache/\|middleware/\|dist/.*\.js\|babel_config\|jest_mock\|mock_data\|webpack_bundle\|env_backup\|cache_old\|build_cache\|vite_temp" "$manifest" 2>/dev/null)
     if [ -n "$suspicious" ]; then
@@ -149,7 +153,7 @@ done
 echo -e "  ${GRN}Done${NC}"
 
 # ---------- 8. SERVER.CFG CHECK ----------
-echo -e "${CYN}[8/8] Checking /etc/hosts for C2 blocks...${NC}"
+echo -e "${CYN}[10/13] Checking /etc/hosts for C2 blocks (fivems.lt + 9ns1.com)...${NC}"
 if grep -q "fivems.lt" /etc/hosts 2>/dev/null; then
     echo -e "  ${GRN}fivems.lt is blocked in /etc/hosts${NC}"
 else

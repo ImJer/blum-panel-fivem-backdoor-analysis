@@ -310,6 +310,7 @@ Luraph payloads with 140+ numeric arrays, double XOR decryption, rotating string
 |--------|---------|--------|
 | Cfx.re | FiveM Team | GFX Panel analysis + payload samples |
 | UAB Esnet | abuse@vpsnet.lt | 185.80.130.168 — exposed C2 server |
+| active 1 GmbH | abuse@active-servers.com | 185.87.23.198 — Blum origin backend (same attacker) |
 | Namecheap | abuse@namecheap.com | gfxpanel.org — malware C2 domain |
 
 ---

@@ -2,8 +2,8 @@
 
 **Classification:** Security Research  
 **Date:** March 13–14, 2026  
-**Duration:** ~14 hours  
-**Investigators:** [Redacted] + [Redacted]
+**Duration:** ~16 hours  
+**Investigators:** [JGN Team Members -Redacted]
 **Status:** Active — C2 infrastructure still online  
 
 ---
@@ -536,16 +536,18 @@ curl -s "https://litecoinspace.org/api/address/LSxKJm6SpdExCACUcFTUADcvZgea65AaW
 ### Immediate (publish now):
 1. **Publish GitHub repository** — `blum-panel-backdoor-analysis` with all deobfuscated files, detection tools, IOCs, and this report
 2. **File abuse reports:**
-   - Cloudflare: fivems.lt, blum-panel.me, warden-panel.me (malware C2)
-   - UAB Esnet (abuse@vpsnet.lt): 185.80.128.35 (stolen file hosting)
-   - Discord Trust & Safety: Invite VB8mdVjrzd, App 1444110004402655403, Users 393666265253937152 & 1368690772123062292
+   - **active 1 GmbH: 185.87.23.198 — Origin C2 backend (Hamburg, Germany, port 5000)**
+   - Cloudflare: 9ns1.com (primary active), fivems.lt, blum-panel.me, warden-panel.me (malware C2)
+   - UAB Esnet (abuse@vpsnet.lt): 185.80.128.35 (stolen file hosting), 185.80.130.168 (GFX Panel)
+   - Discord Trust & Safety: Invite VB8mdVjrzd, App 1444110004402655403, Guild 1306715469776158771, Users 393666265253937152 & 1368690772123062292
    - DOMREG.lt: fivems.lt, jking.lt (malware distribution)
+   - Namecheap: 9ns1.com, gfxpanel.org, blum-panel.com
 3. **Notify Cfx.re** — Provide full analysis for integration into FiveM's security tooling. They have server telemetry that can identify infected servers at scale.
 
 ### Short-term (days):
-4. **Monitor the C2 probe** — Leave `c2_probe.js` running for extended periods to catch panel operators sending commands
+4. **Monitor the C2 probe** — Leave `c2_probe.js` running against 9ns1.com for extended periods to catch panel operators sending commands
 5. **Track crypto wallets** — Set up blockchain monitoring alerts for new transactions
-6. **Capture fresh payloads** — Periodically re-capture from fivems.lt to detect updates
+6. **Capture fresh payloads** — Periodically re-capture from 9ns1.com to detect updates (fivems.lt is dying)
 7. **Build comprehensive FiveM anti-malware resource** — Proactive protection, not just reactive cleanup
 
 ### Medium-term (if resources allow):
@@ -559,7 +561,7 @@ curl -s "https://litecoinspace.org/api/address/LSxKJm6SpdExCACUcFTUADcvZgea65AaW
 
 | Metric | Value |
 |--------|-------|
-| Total investigation time | ~14 hours |
+| Total investigation time | ~16 hours |
 | Files analyzed | 8 malware files + 1 panel bundle |
 | Total obfuscated code processed | ~3.5 MB |
 | Total deobfuscated output | ~130 KB |

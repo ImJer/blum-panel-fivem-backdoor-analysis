@@ -1,8 +1,13 @@
 #!/bin/bash
 # ============================================================================
-# BLUM PANEL C2 BLOCKER v3 — FIXED
+# BLUM PANEL C2 BLOCKER v4 — COMPLETE
 # ============================================================================
-# Changes from v2:
+# Changes from v3:
+#   - Added origin server IP 185.87.23.198 (active 1 GmbH, Hamburg, Germany)
+#   - Added 3 direct Lithuanian IPs (UAB Esnet, file hosting + GFX Panel)
+#   - Added Cipher Panel domains (ciphercheats.com, keyx.club, dark-utilities.xyz)
+#   - Added blum-panel.com and gfxpanel.org
+#   - 9ns1.com listed first (fivems.lt dying)
 #   - Uses REJECT instead of DROP (prevents server hitching from timeouts)
 #   - Checks for Cloudflare/shared IPs before blocking
 #   - Only blocks OUTPUT+FORWARD (not INPUT — C2 can't initiate to you anyway)
@@ -12,7 +17,7 @@
 set -e
 
 echo "============================================"
-echo " BLUM PANEL C2 BLOCKER v3"
+echo " BLUM PANEL C2 BLOCKER v4"
 echo "============================================"
 echo ""
 
@@ -32,8 +37,12 @@ iptables-save | grep -c "C2" 2>/dev/null && {
 echo ""
 
 C2_DOMAINS=(
-    "fivems.lt"
     "9ns1.com"
+    "fivems.lt"
+    "blum-panel.me"
+    "blum-panel.com"
+    "warden-panel.me"
+    "jking.lt"
     "0xchitado.com"
     "2312321321321213.com"
     "2ns3.net"
@@ -44,7 +53,6 @@ C2_DOMAINS=(
     "flowleakz.org"
     "giithub.net"
     "iwantaticket.org"
-    "jking.lt"
     "kutingplays.com"
     "l00x.org"
     "monloox.com"
@@ -53,10 +61,22 @@ C2_DOMAINS=(
     "spacedev.fr"
     "trezz.org"
     "z1lly.org"
-    "warden-panel.me"
     "2nit32.com"
     "useer.it.com"
     "wsichkidolu.com"
+    "cipher-panel.me"
+    "ciphercheats.com"
+    "keyx.club"
+    "dark-utilities.xyz"
+    "gfxpanel.org"
+)
+
+# Direct IP servers — NOT behind CDN, safe to block at iptables level
+DIRECT_IPS=(
+    "185.87.23.198"    # Origin C2 backend (active 1 GmbH, Hamburg, Germany, port 5000)
+    "185.80.128.35"    # Stolen resource file hosting (UAB Esnet, Vilnius, Lithuania)
+    "185.80.128.36"    # Staging/spare server (UAB Esnet, Vilnius, Lithuania)
+    "185.80.130.168"   # GFX Panel C2 (UAB Esnet, Vilnius, Lithuania, port 3000)
 )
 
 # Known CDN/shared hosting ranges to SKIP (would break legitimate traffic)
@@ -124,6 +144,19 @@ for domain in "${C2_DOMAINS[@]}"; do
 done
 
 echo ""
+echo "[1b/4] Blocking direct IP servers (not behind CDN)..."
+DIRECT_BLOCKED=0
+for ip in "${DIRECT_IPS[@]}"; do
+    # These are direct servers, NOT CDN — safe to block
+    iptables -C OUTPUT -d "$ip" -j REJECT --reject-with tcp-reset 2>/dev/null || \
+        iptables -A OUTPUT -d "$ip" -j REJECT --reject-with tcp-reset -m comment --comment "C2-DIRECT:$ip"
+    iptables -C FORWARD -d "$ip" -j REJECT --reject-with tcp-reset 2>/dev/null || \
+        iptables -A FORWARD -d "$ip" -j REJECT --reject-with tcp-reset -m comment --comment "C2-DIRECT-FWD:$ip"
+    echo "  [+] BLOCKED: $ip (direct server — REJECT)"
+    DIRECT_BLOCKED=$((DIRECT_BLOCKED + 1))
+done
+
+echo ""
 echo "[2/4] Updating /etc/hosts..."
 
 # Backup
@@ -158,16 +191,18 @@ echo ""
 echo "============================================"
 echo " SUMMARY"
 echo "============================================"
-echo " Domains:     ${#C2_DOMAINS[@]}"
-echo " IPs blocked: $BLOCKED (REJECT — no timeout)"
-echo " CDN skipped: $SKIPPED (would break traffic)"
+echo " Domains:       ${#C2_DOMAINS[@]}"
+echo " Domain IPs:    $BLOCKED (REJECT — no timeout)"
+echo " Direct IPs:    $DIRECT_BLOCKED (origin + file servers)"
+echo " CDN skipped:   $SKIPPED (would break traffic)"
 echo " Dead/unresolvable: $DEAD (hosts file only)"
 echo ""
-echo " CHANGES FROM v2:"
-echo "   ✓ REJECT replaces DROP (no more hitching)"
-echo "   ✓ CDN/shared IPs skipped (no more conn issues)"
-echo "   ✓ Removed INPUT rules (unnecessary)"
-echo "   ✓ Old v2 rules cleaned up"
+echo " CHANGES FROM v3:"
+echo "   ✓ Added origin server 185.87.23.198 (Hamburg, Germany)"
+echo "   ✓ Added 3 Lithuanian direct IP servers"
+echo "   ✓ Added Cipher Panel domains"
+echo "   ✓ Added blum-panel.com and gfxpanel.org"
+echo "   ✓ 9ns1.com listed as primary (fivems.lt dying)"
 echo ""
 echo " Verify:  iptables -L -n | grep C2"
 echo " Undo:    iptables-save | grep -v C2 | iptables-restore"

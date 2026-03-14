@@ -1,0 +1,65 @@
+# Blum Panel — Captured Payload File Hashes
+# Captured: March 13-14, 2026
+# Use these to verify you're analyzing the same samples
+
+# === JAVASCRIPT REPLICATOR PAYLOADS (1.6MB each) ===
+# These are the live C2 payloads served to infected servers
+
+# fivems.lt/bertJJ (original, now dying)
+# Size: 1,643,860 bytes
+# MD5: [captured during session — fivems.lt endpoint now returns 12 bytes]
+
+# 9ns1.com/zXeAHJJ (active)
+# Size: 1,643,855 bytes
+# MD5: d4becf7aa4a37df8a5ca94b4fdcf0570
+
+# === JSCRAMBLER DROPPER PAYLOADS (/ext/ endpoints) ===
+
+# /ext/bert (fivems.lt + 9ns1.com)
+# Size: 425,385 bytes
+# Note: Disguised as LZString library
+
+# /ext/zXeAH (9ns1.com)
+# Size: 459,562 bytes
+# MD5: 879c228372c6bc36e0bb3714922bcc32
+
+# /ext/dev (9ns1.com)
+# Size: 462,452 bytes
+# MD5: c47fa0744432ba7540b141a26e143611
+
+# /ext/null (9ns1.com)
+# Size: 445,394 bytes
+# MD5: e3e1f38faf89bec707b73209ba5cc5cf
+
+# === LURAPH LUA PAYLOADS ===
+
+# /test (9ns1.com) — API key: zXeAH, C2: 9ns1.com/zXeAHJJ
+# Size: 65,564 bytes
+# MD5: 97a72874d068f103e75306a314839f1f
+
+# /dev (fivems.lt) — API key: dev, C2: fivems.lt/devJJ
+# Size: 64,115 bytes
+# MD5: a6fa269b841893eeb39b900fdd29e66a
+
+# /null (fivems.lt) — API key: null, C2: fivems.lt/nullJJ
+# Size: 64,289 bytes
+# MD5: 01df43eefebdc1f134a4872a6e78a24a
+
+# === PANEL FRONTEND BUNDLE ===
+
+# index-BmknYBUo.js (Blum Panel React app)
+# Size: 1,972,893 bytes
+# Served from: all panel domains (blum-panel.me, warden-panel.me, 9ns1.com, fivems.lt)
+
+# index-B62S1OtC.js (GFX Panel React app)
+# Size: 749,436 bytes
+# Served from: gfxpanel.org, kutingplays.com
+
+# === SIZE REFERENCE ===
+# If a .js file in your server resources is close to these sizes,
+# it may be a Blum Panel payload:
+#   ~425KB  = JScrambler dropper (/ext/ variant)
+#   ~445-462KB = JScrambler dropper (per-customer variant)
+#   ~1.6MB  = Live C2 replicator payload
+#   ~43KB   = XOR dropper (yarn_builder.js variant)
+#   ~64-65KB = Luraph Lua payload

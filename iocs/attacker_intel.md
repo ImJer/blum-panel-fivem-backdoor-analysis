@@ -96,14 +96,22 @@ Payment webhook endpoint: `<backend>/api/payment-webhook`
 
 ## Infrastructure
 
-### C2 Server
-- **Domain:** fivems.lt
-- **IPs:** 172.67.184.207, 104.21.59.225 (Cloudflare proxy)
-- **Origin:** Hidden behind Cloudflare
-- **TLD:** .lt (Lithuania)
+### Origin C2 Backend Server
+- **IP:** 185.87.23.198
+- **Hosting:** active 1 GmbH (active-servers.com)
+- **Location:** Hamburg, Germany
+- **ASN:** AS197071
+- **Port:** 5000 (Express.js/Node.js)
+- **Purpose:** Panel backend — the real server behind all Cloudflare domains
+- **Note:** All panel domains (blum-panel.me, warden-panel.me, 9ns1.com, fivems.lt) proxy to this IP
+
+### C2 Domains (behind Cloudflare)
+- **Primary active:** 9ns1.com (fivems.lt is dying — returns 12 bytes on some endpoints)
+- **IPs:** Cloudflare proxy (172.67.x.x, 104.21.x.x)
 - **SSL issuer:** Google Trust Services (WE1)
 - **SSL cert renewed:** March 12, 2026 (actively maintained)
 - **Backend:** Express.js (x-powered-by: Express)
+- **Note:** API keys are generated dynamically — ANY key works, not access-controlled
 
 ### File Hosting Server
 - **IP:** 185.80.128.35
@@ -115,12 +123,32 @@ Payment webhook endpoint: `<backend>/api/payment-webhook`
 - **Purpose:** Stolen resource ZIP hosting at /download-resource/<filename>
 
 ### Panel Domains (all behind Cloudflare)
-| Domain | Backend | SSL Issuer |
-|--------|---------|------------|
-| blum-panel.me | Express.js | Google Trust Services |
-| warden-panel.me | Express.js | Google Trust Services |
-| cipher-panel.me | nginx/1.18.0 | Google Trust Services |
-| fivems.lt | Express.js | Google Trust Services |
+| Domain | Backend | SSL Issuer | Status |
+|--------|---------|------------|--------|
+| 9ns1.com | Express.js | Google Trust Services | **Active primary** |
+| fivems.lt | Express.js | Google Trust Services | **Dying** (some endpoints dead) |
+| blum-panel.me | Express.js | Google Trust Services | Active |
+| blum-panel.com | Express.js | Google Trust Services | Active |
+| warden-panel.me | Express.js | Google Trust Services | Active |
+| cipher-panel.me | nginx/1.18.0 | Google Trust Services | Separate (original) |
+
+### Additional IOCs
+| Asset | Value |
+|-------|-------|
+| Google Analytics | G-NVDGG6CWYJ |
+| Vimeo channel | vimeo.com/channels/1864287 |
+| Discord Guild ID | 1306715469776158771 |
+| Webhook Channel ID | 1390045431446372372 |
+| Webhook Name | "Captain Hook" |
+| Webhook Status | DELETED by JGN (HTTP 204 confirmed, now 404) |
+
+### Cipher Panel Additional Domains
+| Domain | Purpose |
+|--------|---------|
+| cipher-panel.me | Original panel |
+| ciphercheats.com | Cipher brand |
+| keyx.club | Cipher brand |
+| dark-utilities.xyz | Cipher brand |
 
 ### Obfuscation
 - **Tool:** JScrambler (commercial JavaScript obfuscator)
@@ -133,8 +161,10 @@ Payment webhook endpoint: `<backend>/api/payment-webhook`
 
 | Indicator | Points to |
 |-----------|-----------|
+| Origin server 185.87.23.198 (active 1 GmbH) | **Hamburg, Germany** |
 | .lt domain TLD | Lithuania |
 | File server hosting (UAB Esnet, Vilnius) | Lithuania |
+| GFX Panel hosting (UAB Esnet, Vilnius) | Lithuania |
 | jking.lt in C2 domain list | Lithuania |
 | EUR pricing | European Union |
 | GBP gift cards | UK customer base |

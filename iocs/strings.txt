@@ -84,3 +84,20 @@ interface.js
 bridge.js
 1470175544682217685
 pe8DNcnZCjKPlKF24tk72Riv6bfQcFM6rmMvrwx_
+# Additional C2 domains (March 14 update)
+blum-panel.com
+ciphercheats.com
+keyx.club
+dark-utilities.xyz
+gfxpanel.org
+# Google Analytics (attacker tracking)
+G-NVDGG6CWYJ
+# Additional API key patterns
+roleplayJJ
+cityJJ
+mafiaJJ
+gangJJ
+anonJJ
+panelJJ
+blumJJ
+miaussJJ

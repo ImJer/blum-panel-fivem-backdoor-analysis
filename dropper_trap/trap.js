@@ -25,9 +25,11 @@ const origSRF = typeof SaveResourceFile === 'function' ? SaveResourceFile : null
 
 const SUSPICIOUS = [
     'String.fromCharCode', 'fromCharCode', 'bertjj', 'bertJJ',
-    'miauss', 'miausas', 'fivems.lt', 'RESOURCE_EXCLUDE',
-    'isExcludedResource', 'onServerResourceFail', 'decompressFromUTF16',
-    '\u15E1', 'blum-panel', 'ggWP', 'helpEmptyCode', 'JohnsUrUncle', 'txadmin:js_create',
+    'miauss', 'miausas', 'fivems.lt', '9ns1.com',
+    'blum-panel', 'warden-panel', 'cipher-panel', 'gfxpanel',
+    'RESOURCE_EXCLUDE', 'isExcludedResource', 'onServerResourceFail',
+    'decompressFromUTF16', '\u15E1', 'ggWP', 'helpEmptyCode',
+    'JohnsUrUncle', 'txadmin:js_create',
 ];
 
 const TARGETS = new Set([
@@ -149,12 +151,15 @@ try {
     const origReq = https.request;
 
     const C2 = new Set([
-        'fivems.lt','0xchitado.com','giithub.net','fivemgtax.com',
-        'warden-panel.me','bhlool.com','flowleakz.org','z1lly.org',
+        '9ns1.com','fivems.lt','blum-panel.me','blum-panel.com',
+        'warden-panel.me','jking.lt','gfxpanel.org',
+        '0xchitado.com','giithub.net','fivemgtax.com',
+        'bhlool.com','flowleakz.org','z1lly.org',
         'l00x.org','monloox.com','ryenz.net','spacedev.fr',
         'noanimeisgay.com','trezz.org','2ns3.net','5mscripts.net',
-        'kutingplays.com','bybonvieux.com','iwantaticket.org','jking.lt',
+        'kutingplays.com','bybonvieux.com','iwantaticket.org',
         '2312321321321213.com','2nit32.com','useer.it.com','wsichkidolu.com',
+        'cipher-panel.me','ciphercheats.com','keyx.club','dark-utilities.xyz',
     ]);
 
     function isC2(url) {
