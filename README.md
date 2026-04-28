@@ -677,6 +677,45 @@ Exit codes:
 | `2` | High-confidence indicators found; treat the server as compromised |
 | `3` | Invalid scan path or required privilege problem |
 
+### Windows Remediation
+
+`detection/remediate_windows.ps1` is a Windows Server 2019-compatible remediation helper. It runs in dry-run mode by default and does not change files unless `-Apply` is provided.
+
+Recommended order:
+
+1. Stop the FiveM server process
+2. Run the remediation script without `-Apply` and review the plan
+3. Run it again with `-Apply` only if the planned actions are correct
+4. Run `scan_windows.ps1` again after remediation
+5. Rotate txAdmin, RCON, database, SSH/RDP, FTP/SFTP, and Discord bot credentials
+
+Preview remediation actions:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\remediate_windows.ps1 -Path C:\FXServer\server-data
+```
+
+Apply remediation:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\remediate_windows.ps1 -Path C:\FXServer\server-data -Apply
+```
+
+Apply remediation and also run the Windows C2 blocker:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\remediate_windows.ps1 -Path C:\FXServer\server-data -Apply -BlockC2
+ipconfig /flushdns
+```
+
+Restore txAdmin monitor files from official GitHub raw URLs:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\remediate_windows.ps1 -Path C:\FXServer\server-data -Apply -RestoreTxAdminOfficial
+```
+
+The remediation script quarantines high-confidence malicious JS/Lua loader files into a timestamped `_blum_quarantine_*` directory, backs up edited files, removes manifest references to quarantined files, and removes known `helpEmptyCode` / `onServerResourceFail` txAdmin event backdoor blocks. It does not permanently delete files and does not automatically edit txAdmin admin JSON files; if it reports `JohnsUrUncle`, remove that admin account manually after backing up txAdmin data.
+
 ### Windows C2 Blocking
 
 `detection/block_c2_windows.ps1` is a Windows Server 2019-compatible helper for blocking known Blum/Warden/GFX C2 infrastructure. It runs in dry-run mode by default.
@@ -733,6 +772,7 @@ grep -rn "9ns1\.com\|devJJ\|nullJJ\|zXeAHJJ" --include="*.js" --include="*.lua"
 | `detection/block_c2.sh` | Network blocker (REJECT rules, CDN-safe) |
 | `detection/scan_windows.ps1` | Windows Server 2019-compatible read-only scanner |
 | `detection/block_c2_windows.ps1` | Windows hosts and Defender Firewall C2 blocker |
+| `detection/remediate_windows.ps1` | Windows quarantine and cleanup helper |
 | `detection/c2_probe.js` | Socket.IO passive C2 probe |
 | `dropper_trap/` | FiveM runtime protection hooks |
 | `evidence/panel_viewer.html` | Live investigation dashboard |
@@ -768,6 +808,7 @@ blum-panel-fivem-backdoor-analysis/
 |   +-- block_c2.sh                                  C2 blocker v4 (origin IP + all domains)
 |   +-- scan_windows.ps1                             Windows Server 2019 scanner
 |   +-- block_c2_windows.ps1                         Windows hosts + firewall C2 blocker
+|   +-- remediate_windows.ps1                        Windows quarantine + cleanup helper
 |   +-- c2_probe.js                                  Socket.IO C2 probe (targets 9ns1.com)
 |   +-- enumerate_servers.sh                         Server enumeration tool
 |   +-- blum_probe_v2.sh                             Infrastructure recon v2
