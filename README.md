@@ -646,11 +646,63 @@ GFX Panel serves Luraph-obfuscated Lua payloads from non-standard endpoints (/he
 
 ### Automated Scanner
 
+**Linux:**
+
 ```bash
 chmod +x detection/scan.sh
 cd /path/to/fivem/server
 /path/to/detection/scan.sh
 ```
+
+**Windows Server 2019 / Windows PowerShell 5.1:**
+
+Run the scanner from an elevated or normal PowerShell window. The scanner is read-only: it does not delete files, edit `hosts`, or change firewall rules.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\scan_windows.ps1 -Path C:\FXServer\server-data
+```
+
+Optional JSON output for ticketing or archival:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\scan_windows.ps1 -Path C:\FXServer\server-data -Json
+```
+
+Exit codes:
+
+| Code | Meaning |
+|------|---------|
+| `0` | No known indicators found |
+| `1` | Only medium/low-confidence findings found |
+| `2` | High-confidence indicators found; treat the server as compromised |
+| `3` | Invalid scan path or required privilege problem |
+
+### Windows C2 Blocking
+
+`detection/block_c2_windows.ps1` is a Windows Server 2019-compatible helper for blocking known Blum/Warden/GFX C2 infrastructure. It runs in dry-run mode by default.
+
+Preview the changes:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\block_c2_windows.ps1
+```
+
+Apply protection from an Administrator PowerShell window:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\block_c2_windows.ps1 -Apply
+ipconfig /flushdns
+```
+
+The `-Apply` mode backs up `C:\Windows\System32\drivers\etc\hosts`, adds `0.0.0.0` entries for known C2 domains, and creates outbound Windows Defender Firewall block rules for direct attacker IPs. It does not block FiveM player-facing ports.
+
+Remove the firewall rules created by the script:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\block_c2_windows.ps1 -Undo
+```
+
+The `-Undo` mode removes only the firewall rules created by this script. Hosts entries are left in place; restore the timestamped hosts backup manually if required.
 
 ### Manual Detection
 
@@ -663,11 +715,11 @@ grep -rn "9ns1\.com\|devJJ\|nullJJ\|zXeAHJJ" --include="*.js" --include="*.lua"
 
 ### Remediation Checklist
 
-1. Run `detection/scan.sh` from server root
+1. Run `detection/scan.sh` on Linux or `detection/scan_windows.ps1` on Windows from the server root
 2. Delete all dropper .js files
 3. Clean fxmanifest.lua files — remove injected server_scripts entries
 4. Restore txAdmin files from [official GitHub](https://github.com/tabarra/txAdmin)
-5. Run `detection/block_c2.sh` to block all C2 domains
+5. Run `detection/block_c2.sh` on Linux or `detection/block_c2_windows.ps1 -Apply` on Windows to block known C2 infrastructure
 6. Deploy `dropper_trap/` resource for runtime protection
 7. Check txAdmin for "JohnsUrUncle" admin account
 8. Verify GlobalState.miauss and GlobalState.ggWP are empty
@@ -679,6 +731,8 @@ grep -rn "9ns1\.com\|devJJ\|nullJJ\|zXeAHJJ" --include="*.js" --include="*.lua"
 |------|-------------|
 | `detection/scan.sh` | 13-check scanner (v4, includes Luraph) |
 | `detection/block_c2.sh` | Network blocker (REJECT rules, CDN-safe) |
+| `detection/scan_windows.ps1` | Windows Server 2019-compatible read-only scanner |
+| `detection/block_c2_windows.ps1` | Windows hosts and Defender Firewall C2 blocker |
 | `detection/c2_probe.js` | Socket.IO passive C2 probe |
 | `dropper_trap/` | FiveM runtime protection hooks |
 | `evidence/panel_viewer.html` | Live investigation dashboard |
@@ -712,6 +766,8 @@ blum-panel-fivem-backdoor-analysis/
 +-- detection/
 |   +-- scan.sh                                      13-check malware scanner (v4)
 |   +-- block_c2.sh                                  C2 blocker v4 (origin IP + all domains)
+|   +-- scan_windows.ps1                             Windows Server 2019 scanner
+|   +-- block_c2_windows.ps1                         Windows hosts + firewall C2 blocker
 |   +-- c2_probe.js                                  Socket.IO C2 probe (targets 9ns1.com)
 |   +-- enumerate_servers.sh                         Server enumeration tool
 |   +-- blum_probe_v2.sh                             Infrastructure recon v2
