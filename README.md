@@ -23,10 +23,22 @@
 
 ## Quick Start — Is My Server Infected?
 
-**Run the scanner** from your FiveM server root:
+**Linux** — run the scanner from your FiveM server root:
 
 ```bash
 chmod +x scan.sh && ./scan.sh
+```
+
+**Windows Server 2019 / Windows PowerShell 5.1** — run from any PowerShell window:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 -Action Scan -Path C:\FXServer\server-data
+```
+
+For a full read-only triage that also collects IR evidence and audits Windows persistence (scheduled tasks, services, registry, WMI subscriptions, Defender exclusions):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 -Action All -Path C:\FXServer\server-data -OutputDir .\blum-evidence
 ```
 
 **Check for active infection** in your FiveM server console:
@@ -38,10 +50,19 @@ if GlobalState.ggWP then print("REPLICATOR ACTIVE: "..GlobalState.ggWP) end
 
 **Search the infected server database** — check if your server name appears in `evidence/infected_servers_sanitized.json`.
 
-**Block the C2 immediately:**
+**Block the C2 immediately.**
+
+Linux:
 
 ```bash
 chmod +x block_c2.sh && ./block_c2.sh
+```
+
+Windows (Administrator PowerShell):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 -Action Block -Apply
+ipconfig /flushdns
 ```
 
 ---
@@ -646,11 +667,93 @@ GFX Panel serves Luraph-obfuscated Lua payloads from non-standard endpoints (/he
 
 ### Automated Scanner
 
+**Linux:**
+
 ```bash
 chmod +x detection/scan.sh
 cd /path/to/fivem/server
 /path/to/detection/scan.sh
 ```
+
+**Windows:** see [Windows Tooling](#windows-tooling) below.
+
+### Windows Tooling
+
+Single-file PowerShell tool for Windows Server 2019 / Windows PowerShell 5.1: `detection/blum_windows.ps1`. Six actions cover the full triage-to-cleanup pipeline. Every action is read-only by default; destructive actions require an explicit `-Apply` switch.
+
+| Action | Purpose | Writes anything? |
+|--------|---------|------------------|
+| `Scan` | IOC scan equivalent to `scan.sh` (XOR loader pattern, attacker identifiers, txAdmin tampering, C2 domains, dropper filenames, Discord webhook IOC, payload size ranges, active TCP connections to known C2 IPs, hosts blocking advisory) | No |
+| `Audit` | Windows persistence audit: txAdmin admin accounts, scheduled tasks, registry Run keys, services, WMI permanent event subscriptions, Defender exclusion paths, DNS client cache, recently-modified `.js`/`.lua` files in resources | No |
+| `Forensics` | Timestamped IR snapshot (running processes with command lines, TCP connections with PID + process name, hosts file, recent Security/System/PowerShell event log windows, optional SHA256 hash baseline of all `.js`/`.lua`, txAdmin config copy, optional zip) | Writes only into the evidence directory |
+| `Block` | Hosts file + Windows Defender Firewall outbound rules for known C2 domains and direct IPs. `-Undo` removes the firewall rules created by this script. | Only with `-Apply` or `-Undo` |
+| `Remediate` | Quarantine high/medium-confidence malicious files (moves into a timestamped `_blum_quarantine_*` directory, never deletes), clean infected `fxmanifest.lua` lines, detect (and warn about) txAdmin tampering. Never auto-restores files from the internet. | Only with `-Apply` |
+| `All` | Read-only triage trio: `Scan` + `Audit` + `Forensics`. `Block` and `Remediate` are intentionally NOT bundled — run them explicitly after reviewing results. | No |
+
+**Triage a live server (read-only, safe to run on production):**
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 `
+    -Action All -Path C:\FXServer\server-data -OutputDir .\blum-evidence
+```
+
+Add `-IncludeHashes` to compute a SHA256 baseline of every `.js`/`.lua` under the scan path. Add `-IncludeForensicsZip` to bundle the evidence directory.
+
+**Block C2 infrastructure (Administrator PowerShell required):**
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 -Action Block            # dry run
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 -Action Block -Apply     # apply
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 -Action Block -Undo      # remove firewall rules
+ipconfig /flushdns
+```
+
+`-Apply` writes deduped `0.0.0.0` entries to `C:\Windows\System32\drivers\etc\hosts` (after a timestamped backup) and creates outbound block rules in the firewall group `Blum Panel C2 Block`. `-Undo` removes only the firewall rules; restore the hosts backup manually if needed.
+
+**Quarantine + cleanup (review the dry-run before applying):**
+
+```powershell
+# 1. Stop the FiveM server.
+# 2. Dry-run — print the plan, change nothing:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 -Action Remediate -Path C:\FXServer\server-data
+
+# 3. If the plan is correct, apply it:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 -Action Remediate -Path C:\FXServer\server-data -Apply
+
+# 4. Re-scan to confirm:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 -Action Scan -Path C:\FXServer\server-data
+```
+
+**JSON output for ticketing/SIEM ingestion:**
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1 `
+    -Action Scan -Path C:\FXServer\server-data -Json -JsonOut .\scan.json
+```
+
+`-JsonOut` writes UTF-8 without a BOM so strict JSON parsers (`jq`, Python, Node) consume it directly. Omit `-JsonOut` to emit JSON on stdout instead.
+
+**Exit codes**
+
+| Code | Meaning |
+|------|---------|
+| `0` | No indicators found |
+| `1` | Only medium- or low-confidence findings |
+| `2` | High-confidence indicators found; treat the server as compromised |
+| `3` | Fatal error (path missing, or `-Apply`/`-Undo` requested without Administrator) |
+
+**txAdmin tampering — manual reinstall is required**
+
+If `Scan` or `Remediate` reports txAdmin tampering (`helpEmptyCode`, `onServerResourceFail`, `RESOURCE_EXCLUDE`, `isExcludedResource`, `JohnsUrUncle`), do NOT replace individual files from the txAdmin GitHub `master`/`main` branch. The project has been restructured; individual file URLs may 404 or pull files incompatible with the version you have installed.
+
+1. Note your installed txAdmin version (txAdmin UI -> About).
+2. Stop FiveM.
+3. Download the release matching that version from <https://github.com/tabarra/txAdmin/releases> and reinstall.
+4. Delete any `JohnsUrUncle` admin account from the txAdmin UI after first backing up `admins.json`.
+5. Rotate txAdmin, RCON, database, FTP/SFTP, SSH/RDP, and Discord bot credentials.
+6. Re-run `-Action Scan` to confirm.
+
+The script intentionally has no auto-restore feature.
 
 ### Manual Detection
 
@@ -663,22 +766,23 @@ grep -rn "9ns1\.com\|devJJ\|nullJJ\|zXeAHJJ" --include="*.js" --include="*.lua"
 
 ### Remediation Checklist
 
-1. Run `detection/scan.sh` from server root
-2. Delete all dropper .js files
-3. Clean fxmanifest.lua files — remove injected server_scripts entries
-4. Restore txAdmin files from [official GitHub](https://github.com/tabarra/txAdmin)
-5. Run `detection/block_c2.sh` to block all C2 domains
+1. Run `detection/scan.sh` (Linux) or `detection/blum_windows.ps1 -Action Scan` (Windows) from server root
+2. Delete all dropper .js files (or `-Action Remediate -Apply` on Windows to quarantine them)
+3. Clean fxmanifest.lua files — remove injected server_scripts entries (Windows: handled by `-Action Remediate -Apply`)
+4. Reinstall txAdmin from an [official release](https://github.com/tabarra/txAdmin/releases) matching your installed version (do NOT pull individual files from `master`)
+5. Run `detection/block_c2.sh` (Linux) or `detection/blum_windows.ps1 -Action Block -Apply` (Windows) to block all C2 domains and direct IPs
 6. Deploy `dropper_trap/` resource for runtime protection
-7. Check txAdmin for "JohnsUrUncle" admin account
+7. Check txAdmin for "JohnsUrUncle" admin account (Windows: covered by `-Action Audit`)
 8. Verify GlobalState.miauss and GlobalState.ggWP are empty
-9. Change all txAdmin passwords and API tokens
+9. Change all txAdmin passwords, RCON tokens, database, FTP/SFTP, SSH/RDP, and Discord bot credentials
 
 ### Included Tools
 
 | Tool | Description |
 |------|-------------|
-| `detection/scan.sh` | 13-check scanner (v4, includes Luraph) |
-| `detection/block_c2.sh` | Network blocker (REJECT rules, CDN-safe) |
+| `detection/scan.sh` | 13-check Linux scanner (v4, includes Luraph) |
+| `detection/block_c2.sh` | Linux network blocker (REJECT rules, CDN-safe) |
+| `detection/blum_windows.ps1` | Windows Server 2019 / PowerShell 5.1 all-in-one: scan, audit, forensics, block, remediate |
 | `detection/c2_probe.js` | Socket.IO passive C2 probe |
 | `dropper_trap/` | FiveM runtime protection hooks |
 | `evidence/panel_viewer.html` | Live investigation dashboard |
@@ -710,8 +814,9 @@ blum-panel-fivem-backdoor-analysis/
 |   +-- gfx_test_xor_decoded.bin                     GFX /test payload (XOR decoded)
 |
 +-- detection/
-|   +-- scan.sh                                      13-check malware scanner (v4)
-|   +-- block_c2.sh                                  C2 blocker v4 (origin IP + all domains)
+|   +-- scan.sh                                      Linux scanner (v4, 13 checks, Luraph)
+|   +-- block_c2.sh                                  Linux C2 blocker (origin IP + all domains)
+|   +-- blum_windows.ps1                             Windows all-in-one (scan/audit/forensics/block/remediate)
 |   +-- c2_probe.js                                  Socket.IO C2 probe (targets 9ns1.com)
 |   +-- enumerate_servers.sh                         Server enumeration tool
 |   +-- blum_probe_v2.sh                             Infrastructure recon v2
