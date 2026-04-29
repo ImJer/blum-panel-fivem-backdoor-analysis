@@ -714,7 +714,7 @@ Restore txAdmin monitor files from official GitHub raw URLs:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\detection\remediate_windows.ps1 -Path C:\FXServer\server-data -Apply -RestoreTxAdminOfficial
 ```
 
-The remediation script quarantines high-confidence malicious JS/Lua loader files into a timestamped `_blum_quarantine_*` directory, backs up edited files, removes manifest references to quarantined files, and removes known `helpEmptyCode` / `onServerResourceFail` txAdmin event backdoor blocks. It does not permanently delete files and does not automatically edit txAdmin admin JSON files; if it reports `JohnsUrUncle`, remove that admin account manually after backing up txAdmin data.
+The remediation script quarantines high- and medium-confidence malicious or suspicious JS/Lua files into a timestamped `_blum_quarantine_*` directory, backs up edited files, removes manifest references to quarantined files, and removes known `helpEmptyCode` / `onServerResourceFail` txAdmin event backdoor blocks. Medium-confidence remediation includes known dropper filenames in suspicious paths and JS/Lua files with known Blum obfuscation or loader markers. It does not permanently delete files and does not automatically edit txAdmin admin JSON files; if it reports `JohnsUrUncle`, remove that admin account manually after backing up txAdmin data.
 
 ### Windows C2 Blocking
 

@@ -20,7 +20,7 @@ Recommended flow:
 
 What -Apply does:
   - Creates a timestamped quarantine directory.
-  - Moves high-confidence malicious JS/Lua loader files into quarantine.
+  - Moves high- and medium-confidence malicious or suspicious JS/Lua files into quarantine.
   - Backs up edited files before changes.
   - Removes manifest lines that reference quarantined files.
   - Removes the known helpEmptyCode and onServerResourceFail txAdmin event blocks.
@@ -89,6 +89,7 @@ $C2Pattern = "(?i)(9ns1\.com|fivems\.lt|blum-panel\.me|blum-panel\.com|warden-pa
 $LoaderPattern = "(?i)(eval\s*\(|new\s+Function\s*\(|runInThisContext|https\.get|https\.request|PerformHttpRequest|LoadResourceFile|SaveResourceFile)"
 $XorPattern = "String\.fromCharCode\s*\(\s*[A-Za-z0-9_$]+\s*\[\s*[A-Za-z0-9_$]+\s*\]\s*\^\s*[A-Za-z0-9_$]+\s*\)"
 $LuraphPattern = "(?i)(Luraph Obfuscator|installed_notices|devJJ|nullJJ|zXeAHJJ|roleplayJJ|cityJJ|mafiaJJ|gangJJ|anonJJ|panelJJ|blumJJ|miaussJJ)"
+$MediumMarkerPattern = "(?i)(decompressFromUTF16|\\u15E1|aga\[0x|UARZT6\[|Luraph Obfuscator|installed_notices|vm'\)\.runInThisContext|devJJ|nullJJ|zXeAHJJ|roleplayJJ|cityJJ|mafiaJJ|gangJJ|anonJJ|panelJJ|blumJJ|miaussJJ)"
 
 $DropperNames = @(
     "babel_config.js",
@@ -225,7 +226,9 @@ function Test-TextCandidate {
 function Add-QuarantineCandidate {
     param(
         [System.IO.FileInfo]$File,
-        [string]$Reason
+        [string]$Reason,
+        [ValidateSet("High", "Medium")]
+        [string]$Severity = "High"
     )
     if ($QuarantineItems.Count -ge $MaxHits) { return }
     $Existing = $QuarantineItems | Where-Object { $_.path -ieq $File.FullName } | Select-Object -First 1
@@ -235,6 +238,7 @@ function Add-QuarantineCandidate {
     $QuarantineItems.Add([pscustomobject]@{
         path       = $File.FullName
         relative   = $Relative
+        severity   = $Severity
         reason     = $Reason
         size_bytes = [int64]$File.Length
     }) | Out-Null
@@ -319,7 +323,7 @@ if (-not $Json) {
     }
 }
 
-Write-Step "[1/6] Finding high-confidence malicious loader files"
+Write-Step "[1/6] Finding high- and medium-confidence malicious or suspicious files"
 $Files = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force -ErrorAction SilentlyContinue |
     Where-Object {
         $_.FullName -notmatch "[\\/]\.git[\\/]" -and
@@ -338,32 +342,42 @@ foreach ($File in $Files) {
     $SuspiciousPath = $File.FullName -match "(?i)[\\/](server|modules|middleware|dist)[\\/]|[\\/]node_modules[\\/]\.cache[\\/]"
 
     if ($Ext -eq ".js" -and $Text -match $XorPattern -and $Text -match "eval\s*\(") {
-        Add-QuarantineCandidate -File $File -Reason "XOR JavaScript dropper with eval"
+        Add-QuarantineCandidate -File $File -Severity "High" -Reason "XOR JavaScript dropper with eval"
         continue
     }
 
     if (($Ext -eq ".js" -or $Ext -eq ".lua") -and $Text -match $C2Pattern -and $Text -match $LoaderPattern) {
-        Add-QuarantineCandidate -File $File -Reason "Known C2 reference with executable loader behavior"
+        Add-QuarantineCandidate -File $File -Severity "High" -Reason "Known C2 reference with executable loader behavior"
         continue
     }
 
     if ($Ext -eq ".lua" -and $Text -match $LuraphPattern -and ($Text -match $C2Pattern -or $Text -match "PerformHttpRequest")) {
-        Add-QuarantineCandidate -File $File -Reason "Luraph or Lua loader marker with C2 behavior"
+        Add-QuarantineCandidate -File $File -Severity "High" -Reason "Luraph or Lua loader marker with C2 behavior"
         continue
     }
 
     if (($DropperNames -contains $Name) -and $SuspiciousPath -and $Text -match "(?i)(fromCharCode|eval\s*\(|https\.get|PerformHttpRequest)") {
-        Add-QuarantineCandidate -File $File -Reason "Known dropper filename in suspicious path with loader markers"
+        Add-QuarantineCandidate -File $File -Severity "High" -Reason "Known dropper filename in suspicious path with loader markers"
+        continue
+    }
+
+    if (($DropperNames -contains $Name) -and $SuspiciousPath) {
+        Add-QuarantineCandidate -File $File -Severity "Medium" -Reason "Known dropper filename in suspicious path"
+        continue
+    }
+
+    if (($Ext -eq ".js" -or $Ext -eq ".lua") -and $Text -match $MediumMarkerPattern) {
+        Add-QuarantineCandidate -File $File -Severity "Medium" -Reason "Obfuscation or loader marker matched scanner Medium rule"
         continue
     }
 }
 
 if ($QuarantineItems.Count -eq 0) {
-    Write-Info "No high-confidence loader files selected for quarantine." "Green"
+    Write-Info "No high- or medium-confidence files selected for quarantine." "Green"
 } else {
     foreach ($Item in $QuarantineItems) {
-        Write-Info "Quarantine planned: $($Item.relative) - $($Item.reason)" "Yellow"
-        Add-Action -Type "Quarantine" -Target $Item.path -Reason $Item.reason
+        Write-Info "Quarantine planned [$($Item.severity)]: $($Item.relative) - $($Item.reason)" "Yellow"
+        Add-Action -Type "Quarantine" -Target $Item.path -Reason "[$($Item.severity)] $($Item.reason)"
     }
 }
 
@@ -567,12 +581,16 @@ if ($BlockC2) {
 Write-Step "[6/6] Summary"
 $SummaryMode = "dry-run"
 if ($Apply) { $SummaryMode = "apply" }
+$HighQuarantineCount = @($QuarantineItems | Where-Object { $_.severity -eq "High" }).Count
+$MediumQuarantineCount = @($QuarantineItems | Where-Object { $_.severity -eq "Medium" }).Count
 $Summary = [pscustomobject]@{
     mode                    = $SummaryMode
     path                    = $Root
     quarantine_dir          = $QuarantineDir
     actions_planned_or_run  = $Actions.Count
     quarantine_candidates   = $QuarantineItems.Count
+    high_quarantine         = $HighQuarantineCount
+    medium_quarantine       = $MediumQuarantineCount
     manifest_files_changed  = $ManifestEdits.Count
     txadmin_files_changed   = $TxAdminEdits.Count
     warnings                = $Warnings.Count
@@ -598,6 +616,8 @@ if ($Json) {
     Write-Host " Mode:                  $($Summary.mode)"
     Write-Host " Actions:               $($Summary.actions_planned_or_run)"
     Write-Host " Quarantine candidates: $($Summary.quarantine_candidates)"
+    Write-Host " High quarantine:       $($Summary.high_quarantine)"
+    Write-Host " Medium quarantine:     $($Summary.medium_quarantine)"
     Write-Host " Manifest files changed:$($Summary.manifest_files_changed)"
     Write-Host " txAdmin files changed: $($Summary.txadmin_files_changed)"
     Write-Host " Warnings:              $($Summary.warnings)"
