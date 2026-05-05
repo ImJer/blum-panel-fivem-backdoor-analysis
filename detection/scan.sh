@@ -37,6 +37,9 @@ else
 fi
 
 # ---------- 2. ATTACKER STRINGS ----------
+# Alternation of attacker handles, panel brand names, and operator constants.
+# The \| separators are grep BRE alternation ("or"), not parts of one name.
+# Any single match in .js/.lua/.cfg is a high-confidence indicator.
 echo -e "${CYN}[2/13] Scanning for attacker identifiers...${NC}"
 hits=$(grep -rn "bertjj\|bertJJ\|miauss\|miausas\|fivems\.lt\|9ns1\.com\|VB8mdVjrzd\|blum-panel\|warden-panel\|cipher-panel\|gfxpanel\|ggWP" --include="*.js" --include="*.lua" --include="*.cfg" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|SCANNER\|scan.sh\|block_c2\|README\|\.md$")
 if [ -n "$hits" ]; then
@@ -48,6 +51,18 @@ else
 fi
 
 # ---------- 3. TXADMIN TAMPERING ----------
+# Single grep matching ANY of 6 markers (\| is regex alternation — "or" — NOT
+# part of an event name). Each marker is a SEPARATE injection point in a
+# SEPARATE file:
+#   helpEmptyCode          -> client-side RCE in monitor/resource/cl_playerlist.lua
+#   RESOURCE_EXCLUDE       -> resource cloaking list in monitor/resource/sv_main.lua
+#   isExcludedResource     -> resource cloaking helper in monitor/resource/sv_main.lua
+#   onServerResourceFail   -> server-side RCE in monitor/resource/sv_resources.lua
+#   JohnsUrUncle           -> backdoor admin account name in txData/admins.json
+#   txadmin:js_create      -> JS execution event used by some Blum variants
+# A clean txAdmin install does not contain any of these. See
+# docs/TXADMIN_TAMPERING.md for what each injection looks like and the
+# recommended remediation (full reinstall, not surgery).
 echo -e "${CYN}[3/13] Scanning for txAdmin tampering...${NC}"
 hits=$(grep -rn "RESOURCE_EXCLUDE\|isExcludedResource\|onServerResourceFail\|helpEmptyCode\|JohnsUrUncle\|txadmin:js_create" --include="*.lua" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|scan.sh\|README")
 if [ -n "$hits" ]; then
@@ -130,6 +145,11 @@ else
 fi
 
 # ---------- 6. LZSTRING / OBFUSCATION MARKERS ----------
+# Alternation of obfuscation residue (\| = "or"):
+#   decompressFromUTF16 -> lz-string runtime call used to inflate payloads
+#   \\u15E1             -> JScrambler array-key Unicode escape
+#   aga[0x              -> runtime array indexing pattern in c2_payload.js
+#   UARZT6[             -> JScrambler indirection-array reference
 echo -e "${CYN}[8/13] Scanning for obfuscation markers...${NC}"
 hits=$(grep -rn "decompressFromUTF16\|\\\\u15E1\|aga\[0x\|UARZT6\[" --include="*.js" "$SCAN_DIR" 2>/dev/null | grep -v "dropper_trap\|scan.sh\|README\|deobfuscated")
 if [ -n "$hits" ]; then
@@ -170,6 +190,11 @@ if [ -n "$LURAPH" ]; then
 fi
 
 # --- CHECK 12: Luraph dropper JS filenames + KVP persistence ---
+# Alternation of Luraph-family dropper artefacts (\| = "or"):
+#   installed_notices       -> KVP persistence key written by the dropper
+#   vm').runInThisContext   -> Node VM module string used to evaluate payloads
+#   9ns1.com                -> primary C2 host
+#   devJJ / nullJJ / zXeAHJJ -> operator JJ-suffix API keys
 echo -e "${CYN}[12/13] Checking for Luraph dropper artifacts...${NC}"
 DROPPER_JS=$(grep -rn "installed_notices\|vm').runInThisContext\|9ns1\.com\|devJJ\|nullJJ\|zXeAHJJ" --include="*.js" --include="*.lua" 2>/dev/null | head -5)
 if [ -n "$DROPPER_JS" ]; then

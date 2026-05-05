@@ -774,11 +774,88 @@ The script intentionally has no auto-restore feature.
 
 ### Manual Detection
 
+The automated scanners are the recommended route. The shell-level checks below are useful for spot verification — keep in mind that `\|` in `grep` is regex alternation ("or"), so `RESOURCE_EXCLUDE\|isExcludedResource` searches for *either* string. They are not parts of one event name.
+
+**XOR dropper byte-pattern (in any .js):**
+
 ```bash
+# Linux
 grep -rn "String.fromCharCode(a\[i\]\^k)" --include="*.js"
-grep -rn "bertjj\|miauss\|fivems\.lt\|ggWP\|helpEmptyCode\|JohnsUrUncle" --include="*.js" --include="*.lua"
-grep -rn "Luraph Obfuscator\|installed_notices" --include="*.lua"
-grep -rn "9ns1\.com\|devJJ\|nullJJ\|zXeAHJJ" --include="*.js" --include="*.lua"
+```
+```powershell
+# Windows
+Get-ChildItem -Recurse -Filter '*.js' | Select-String 'String\.fromCharCode\(a\[i\]\^k\)'
+```
+
+**Attacker identifiers, panel brand names, operator constants:**
+
+```bash
+# Linux
+grep -rn "bertjj\|miauss\|fivems\.lt\|9ns1\.com\|VB8mdVjrzd\|ggWP\|blum-panel\|warden-panel\|cipher-panel\|gfxpanel" --include="*.js" --include="*.lua"
+```
+```powershell
+# Windows
+Get-ChildItem -Recurse -Include '*.js','*.lua' | Select-String 'bertjj|miauss|fivems\.lt|9ns1\.com|VB8mdVjrzd|ggWP|blum-panel|warden-panel|cipher-panel|gfxpanel'
+```
+
+**txAdmin tampering — three separate injection points in three different files.** Each marker below lives in *one specific file*; finding one of them does not mean you have caught the others. See [`docs/TXADMIN_TAMPERING.md`](docs/TXADMIN_TAMPERING.md) for the full walkthrough including code snippets and the recommended remediation procedure.
+
+```bash
+# Linux
+
+# Client-side RCE (helpEmptyCode in cl_playerlist.lua):
+grep -n "helpEmptyCode" monitor/resource/cl_playerlist.lua
+
+# Server-side RCE (onServerResourceFail in sv_resources.lua) — the dangerous one:
+grep -n "onServerResourceFail" monitor/resource/sv_resources.lua
+
+# Resource cloaking (RESOURCE_EXCLUDE / isExcludedResource in sv_main.lua):
+grep -n "RESOURCE_EXCLUDE\|isExcludedResource" monitor/resource/sv_main.lua
+
+# Backdoor txAdmin admin account:
+grep -rn "JohnsUrUncle" txData/
+```
+```powershell
+# Windows
+Select-String -Path .\monitor\resource\cl_playerlist.lua -Pattern 'helpEmptyCode'
+Select-String -Path .\monitor\resource\sv_resources.lua -Pattern 'onServerResourceFail'
+Select-String -Path .\monitor\resource\sv_main.lua      -Pattern 'RESOURCE_EXCLUDE','isExcludedResource'
+Get-ChildItem .\txData\ -Recurse -Filter '*.json' | Select-String 'JohnsUrUncle'
+```
+
+If any of those return matches, **reinstall txAdmin from a release matching your installed version** rather than editing files in place — see [`docs/TXADMIN_TAMPERING.md`](docs/TXADMIN_TAMPERING.md) for the procedure.
+
+**JScrambler / Luraph obfuscation residue:**
+
+```bash
+# Linux
+grep -rn "Luraph Obfuscator\|installed_notices\|decompressFromUTF16" --include="*.lua" --include="*.js"
+```
+```powershell
+# Windows
+Get-ChildItem -Recurse -Include '*.lua','*.js' | Select-String 'Luraph Obfuscator|installed_notices|decompressFromUTF16'
+```
+
+**JJ-suffix operator API keys (every word ending in `JJ` is a candidate):**
+
+```bash
+# Linux
+grep -rn "devJJ\|nullJJ\|zXeAHJJ\|roleplayJJ\|cityJJ\|mafiaJJ\|gangJJ\|anonJJ\|panelJJ\|blumJJ\|miaussJJ" --include="*.js" --include="*.lua"
+```
+```powershell
+# Windows
+Get-ChildItem -Recurse -Include '*.js','*.lua' | Select-String 'devJJ|nullJJ|zXeAHJJ|roleplayJJ|cityJJ|mafiaJJ|gangJJ|anonJJ|panelJJ|blumJJ|miaussJJ'
+```
+
+**Discord phone-home webhook IDs:**
+
+```bash
+# Linux
+grep -rn "1470175544682217685\|pe8DNcnZCjKPlKF24tk72R" --include="*.js" --include="*.lua"
+```
+```powershell
+# Windows
+Get-ChildItem -Recurse -Include '*.js','*.lua' | Select-String '1470175544682217685|pe8DNcnZCjKPlKF24tk72R'
 ```
 
 ### Remediation Checklist
