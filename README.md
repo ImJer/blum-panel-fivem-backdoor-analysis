@@ -67,6 +67,23 @@ ipconfig /flushdns
 
 ---
 
+## ⚠️ Read this if your scanner reports findings
+
+The scope of what you must rotate and rebuild depends on **where FXServer was running** when it got infected. The malware has full code execution as the user that runs FXServer, so the blast radius follows that user's privileges.
+
+| Environment | Blast radius | Files alone enough? | Minimum response |
+|-------------|--------------|---------------------|------------------|
+| Pterodactyl / Docker container on Linux | The container | Yes (non-privileged) | Scrub resources, rotate FiveM creds (txAdmin / RCON / license / DB / Discord), redeploy from a clean image |
+| Linux host (no Docker) | The user account that ran FXServer | Sometimes | Above + audit cron / systemd / `.bashrc` / `.ssh` for that user. Reinstall OS if the user was root. |
+| **Windows host, non-admin user** | **Entire user profile**, including every browser-saved password and session cookie (DPAPI is decryptable by code running as that user) | **No** | Above + force-logout-everywhere on every account ever signed into a browser as that user, rotate every saved password, delete and recreate the Windows user |
+| **Windows host, Administrator** | **Entire OS** (SYSTEM access, kernel drivers, LSASS dumpable, Defender exclusions, all users) | **No** | **Reinstall Windows from clean media.** No "clean it in place" option exists. |
+
+A successful run of `detection/scan.sh` or `detection/blum_windows.ps1 -Action Scan` confirms the *files are gone*. It does **not** confirm the *machine is trustworthy* — that depends on the environment above.
+
+Full rotation and rebuild guidance, including a flat credential-rotation checklist by category and notes on Discord tokens, Steam ssfn files, OAuth refresh tokens, and SSH agent forwarding: **[`docs/BLAST_RADIUS.md`](docs/BLAST_RADIUS.md)**.
+
+---
+
 ## Table of Contents
 
 - [Executive Summary](#executive-summary)

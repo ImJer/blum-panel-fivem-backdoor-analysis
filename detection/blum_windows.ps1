@@ -1454,6 +1454,14 @@ function Write-Summary {
         if ($high -gt 0) {
             Write-Host 'Result: HIGH-CONFIDENCE indicators present. Treat the server as compromised until proven otherwise.' -ForegroundColor Red
             Write-Host 'Next:   Isolate, preserve evidence, run -Action Forensics, then -Action Remediate -Apply.' -ForegroundColor Red
+            Write-Host ''
+            Write-Host 'IMPORTANT: cleaning files is not the same as cleaning the machine.' -ForegroundColor Red
+            Write-Host '  - In a Pterodactyl/Docker container on Linux, file scrub + credential rotation is usually enough.' -ForegroundColor Red
+            Write-Host '  - On a Windows host running FXServer directly, the user that ran FXServer can decrypt every' -ForegroundColor Red
+            Write-Host '    browser-saved password and session cookie (DPAPI). Credential rotation and force-logout-' -ForegroundColor Red
+            Write-Host '    everywhere are required, and an OS reinstall is commonly required if FXServer ran as Admin.' -ForegroundColor Red
+            Write-Host '  - Read docs/BLAST_RADIUS.md before assuming a scrub is enough:' -ForegroundColor Red
+            Write-Host '    https://github.com/ImJer/blum-panel-fivem-backdoor-analysis/blob/main/docs/BLAST_RADIUS.md' -ForegroundColor Red
         } elseif (($medium + $low) -gt 0) {
             Write-Host 'Result: Review findings. No high-confidence indicators were found.' -ForegroundColor Yellow
         } else {
