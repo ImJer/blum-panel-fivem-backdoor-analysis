@@ -314,3 +314,13 @@ Once you've completed the appropriate checklist, run the scanner one more time o
 Then deploy the runtime protection in `dropper_trap/` so that the next time someone tries to install a Blum-family resource, the dropper trips before it can phone home.
 
 Stay paranoid. The whole reason this backdoor worked at scale is that operators trusted resources they didn't audit.
+
+---
+
+## See also
+
+- [`docs/TXADMIN_TAMPERING.md`](TXADMIN_TAMPERING.md) — five txAdmin tampering points walkthrough with code snippets and the recommended reinstall procedure
+- [`docs/HARDENING.md`](HARDENING.md) — defense-in-depth playbook for hardening your server *before* the next infection, so the blast radius is bounded by design rather than mitigated by recovery
+- [`detection/blum_windows.ps1`](../detection/blum_windows.ps1) — Windows tooling (Scan / Audit / Forensics / Block / Remediate / Baseline / Compare)
+- [`dropper_trap/`](../dropper_trap) — FiveM-side runtime trap (deploy as the first `ensure` in `resources.cfg`)
+- [`iocs/blum_iocs.json`](../iocs/blum_iocs.json) — canonical IOC inventory consumed by every scanner and runtime trap in this repo

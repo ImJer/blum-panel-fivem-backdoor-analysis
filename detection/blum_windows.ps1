@@ -54,12 +54,14 @@
 [CmdletBinding(DefaultParameterSetName = 'ByAction')]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('Scan', 'Audit', 'Forensics', 'Block', 'Remediate', 'All')]
+    [ValidateSet('Scan', 'Audit', 'Forensics', 'Block', 'Remediate', 'Baseline', 'Compare', 'All')]
     [string]$Action,
 
     [string]$Path = '.',
 
     [string]$OutputDir = '',
+
+    [string]$BaselineFile = '',
 
     [switch]$Apply,
 
@@ -1399,6 +1401,163 @@ function Invoke-BlumRemediate {
 # endregion
 
 # ============================================================================
+# region Action: Baseline
+# ============================================================================
+
+function Invoke-BlumBaseline {
+    param([string]$ScanRoot, [string]$EvidenceDir)
+
+    if (-not $EvidenceDir) { $EvidenceDir = (Get-Location).Path }
+    if (-not (Test-Path -LiteralPath $EvidenceDir)) {
+        [void](New-Item -ItemType Directory -Path $EvidenceDir -Force)
+    }
+    $outFile = Join-Path $EvidenceDir "baseline-$Script:TimeStamp.json"
+
+    Write-Section '[Baseline] Hashing all .lua and .js under scan path'
+
+    $maxBytes = [int64]$MaxFileMB * 1024 * 1024
+    $files = @(Get-ChildItem -LiteralPath $ScanRoot -Recurse -File -Force -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.FullName -notmatch '[\\/]\.git[\\/]' -and
+            $_.FullName -notmatch '[\\/]node_modules[\\/]' -and
+            -not ($Script:SelfNames -contains $_.Name.ToLowerInvariant()) -and
+            $_.Extension.ToLowerInvariant() -in @('.js', '.lua') -and
+            $_.Length -le $maxBytes
+        })
+
+    $entries = New-Object System.Collections.Generic.List[object]
+    foreach ($f in $files) {
+        try {
+            $h = Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256 -ErrorAction Stop
+            $rel = (Get-RelativePathSafe -BasePath $ScanRoot -FullPath $f.FullName) -replace '\\', '/'
+            [void]$entries.Add([pscustomobject]@{
+                path   = $rel
+                size   = [int64]$f.Length
+                sha256 = $h.Hash.ToLower()
+            })
+        } catch { }
+    }
+
+    # Sort by path for deterministic output (easier to diff baseline files visually)
+    $sorted = @($entries | Sort-Object -Property path)
+
+    $baseline = [pscustomobject]@{
+        tool          = 'blum-panel-windows-tooling'
+        action        = 'Baseline'
+        version       = '1'
+        generated_utc = (Get-Date).ToUniversalTime().ToString('o')
+        scan_root     = $ScanRoot
+        file_count    = $sorted.Count
+        files         = $sorted
+    }
+
+    $jsonText = $baseline | ConvertTo-Json -Depth 5
+    [System.IO.File]::WriteAllText($outFile, $jsonText, $Script:Utf8NoBom)
+    Write-OK "Baseline written: $outFile ($($sorted.Count) files)"
+    Add-Action -Type 'Baseline' -Target $outFile -Reason "$($sorted.Count) files hashed" -Result 'Done'
+}
+
+# endregion
+
+# ============================================================================
+# region Action: Compare
+# ============================================================================
+
+function Invoke-BlumCompare {
+    param([string]$ScanRoot, [string]$BaselineFilePath)
+
+    if (-not $BaselineFilePath -or -not (Test-Path -LiteralPath $BaselineFilePath)) {
+        [Console]::Error.WriteLine("Baseline file not found: $BaselineFilePath")
+        [Console]::Error.WriteLine('Pass -BaselineFile pointing at a JSON file produced by -Action Baseline.')
+        exit 3
+    }
+
+    Write-Section '[Compare] Loading baseline'
+    $baselineRaw = Get-Content -LiteralPath $BaselineFilePath -Raw -ErrorAction Stop
+    $baseline = $baselineRaw | ConvertFrom-Json -ErrorAction Stop
+    $baselineMap = @{}
+    foreach ($e in $baseline.files) { $baselineMap[$e.path] = $e }
+    Write-OK "Loaded baseline with $($baseline.files.Count) files (generated $($baseline.generated_utc))"
+
+    Write-Section '[Compare] Hashing current state'
+    $maxBytes = [int64]$MaxFileMB * 1024 * 1024
+    $files = @(Get-ChildItem -LiteralPath $ScanRoot -Recurse -File -Force -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.FullName -notmatch '[\\/]\.git[\\/]' -and
+            $_.FullName -notmatch '[\\/]node_modules[\\/]' -and
+            -not ($Script:SelfNames -contains $_.Name.ToLowerInvariant()) -and
+            $_.Extension.ToLowerInvariant() -in @('.js', '.lua') -and
+            $_.Length -le $maxBytes
+        })
+
+    $currentMap = @{}
+    foreach ($f in $files) {
+        try {
+            $h = Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256 -ErrorAction Stop
+            $rel = (Get-RelativePathSafe -BasePath $ScanRoot -FullPath $f.FullName) -replace '\\', '/'
+            $currentMap[$rel] = [pscustomobject]@{
+                path   = $rel
+                size   = [int64]$f.Length
+                sha256 = $h.Hash.ToLower()
+            }
+        } catch { }
+    }
+    Write-OK "Hashed $($currentMap.Count) current files"
+
+    Write-Section '[Compare] Drift'
+    $modified = @()
+    $added    = @()
+    $removed  = @()
+    foreach ($key in $currentMap.Keys) {
+        if (-not $baselineMap.ContainsKey($key)) {
+            $added += $currentMap[$key]
+        } elseif ($baselineMap[$key].sha256 -ne $currentMap[$key].sha256) {
+            $modified += [pscustomobject]@{
+                path       = $key
+                old_sha256 = $baselineMap[$key].sha256
+                new_sha256 = $currentMap[$key].sha256
+                old_size   = $baselineMap[$key].size
+                new_size   = $currentMap[$key].size
+            }
+        }
+    }
+    foreach ($key in $baselineMap.Keys) {
+        if (-not $currentMap.ContainsKey($key)) {
+            $removed += $baselineMap[$key]
+        }
+    }
+
+    if ($modified.Count -eq 0 -and $added.Count -eq 0 -and $removed.Count -eq 0) {
+        Write-OK "No drift detected ($($currentMap.Count) files match baseline)"
+    } else {
+        if ($modified.Count -gt 0) {
+            Write-WarnLine "$($modified.Count) modified file(s):"
+            foreach ($m in $modified) {
+                Write-InfoLine "$($m.path) (sha256 $($m.old_sha256.Substring(0,12)) -> $($m.new_sha256.Substring(0,12)); $($m.old_size) -> $($m.new_size) bytes)" 'Yellow'
+                Add-Finding -Severity 'Medium' -Check 'Resource file modified vs baseline' `
+                    -File $m.path -Evidence "old=$($m.old_sha256.Substring(0,16)); new=$($m.new_sha256.Substring(0,16))" `
+                    -Advice 'Confirm the change was intentional. If not, treat as tampering.'
+            }
+        }
+        if ($added.Count -gt 0) {
+            Write-WarnLine "$($added.Count) new file(s):"
+            foreach ($a in $added) {
+                Write-InfoLine "$($a.path) ($($a.size) bytes, sha256 $($a.sha256.Substring(0,12))...)" 'Yellow'
+                Add-Finding -Severity 'Low' -Check 'New file added since baseline' `
+                    -File $a.path -Evidence "size=$($a.size); sha256=$($a.sha256.Substring(0,16))" `
+                    -Advice 'Confirm the file was added intentionally.'
+            }
+        }
+        if ($removed.Count -gt 0) {
+            Write-InfoLine "$($removed.Count) removed file(s):" 'Cyan'
+            foreach ($r in $removed) { Write-InfoLine $r.path 'Cyan' }
+        }
+    }
+}
+
+# endregion
+
+# ============================================================================
 # region Summary
 # ============================================================================
 
@@ -1468,6 +1627,61 @@ function Write-Summary {
             Write-Host 'Result: No known Blum Panel indicators found.' -ForegroundColor Green
         }
         Write-Host '================================================'
+
+        # Optional: copy-paste template for sharing findings with maintainers.
+        # No automatic reporting — operators copy what they want into a new issue.
+        if ($Script:Findings.Count -gt 0) {
+            $osCaption = 'Unknown Windows'
+            try {
+                $osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+                $osCaption = $osInfo.Caption
+            } catch { }
+
+            Write-Host ''
+            Write-Host '================================================'
+            Write-Host ' OPTIONAL: SHARE FINDINGS WITH MAINTAINERS'
+            Write-Host '================================================'
+            Write-Host 'No automatic reporting. If you want a second pair of eyes on these'
+            Write-Host 'findings, copy the block between BEGIN/END COPY-PASTE TEMPLATE below'
+            Write-Host 'and open an issue at:'
+            Write-Host '  https://github.com/ImJer/blum-panel-fivem-backdoor-analysis/issues/new?template=scanner-findings.md' -ForegroundColor Cyan
+            Write-Host ''
+            Write-Host '--- BEGIN COPY-PASTE TEMPLATE ---' -ForegroundColor Yellow
+            Write-Host '## Which tool surfaced the findings?'
+            Write-Host ''
+            Write-Host ('- [x] `detection/blum_windows.ps1` (Windows) - action: ' + $Action)
+            Write-Host ''
+            Write-Host '## Scanner output'
+            Write-Host ''
+            Write-Host '```'
+            Write-Host ('BLUM PANEL WINDOWS TOOLING v1 - Action: ' + $Action + ' - Mode: ' + $Script:Mode)
+            Write-Host ('High: ' + $high + '  Medium: ' + $medium + '  Low: ' + $low + '  Total: ' + $Script:Findings.Count)
+            Write-Host ''
+            foreach ($f in $Script:Findings) {
+                $loc = ''
+                if ($f.file) {
+                    $loc = $f.file
+                    if ($f.line -gt 0) { $loc = $f.file + ':' + $f.line }
+                    $loc = ' - ' + $loc
+                }
+                Write-Host ('[' + $f.severity + '] ' + $f.check + $loc)
+                if ($f.evidence) { Write-Host ('  Evidence: ' + $f.evidence) }
+            }
+            Write-Host '```'
+            Write-Host ''
+            Write-Host '## Environment'
+            Write-Host ''
+            Write-Host ('- OS: ' + $osCaption)
+            Write-Host ('- PowerShell: ' + $PSVersionTable.PSVersion)
+            Write-Host '- Scanner: blum_windows.ps1 (commit: see "git log -1" in your local clone)'
+            Write-Host ('- Date (UTC): ' + (Get-Date).ToUniversalTime().ToString('o'))
+            Write-Host ''
+            Write-Host '## Where is FXServer running?'
+            Write-Host ''
+            Write-Host '<!-- replace with your environment: Pterodactyl/Docker, Linux host, Windows host non-admin, Windows host admin, Windows-also-workstation -->'
+            Write-Host ''
+            Write-Host '--- END COPY-PASTE TEMPLATE ---' -ForegroundColor Yellow
+        }
     }
 }
 
@@ -1485,6 +1699,12 @@ if ($Action -ne 'Block') {
     $resolvedPath = Resolve-PathOrExit -InputPath $Path
 }
 
+# Compare requires a baseline file
+if ($Action -eq 'Compare' -and (-not $BaselineFile -or -not (Test-Path -LiteralPath $BaselineFile))) {
+    [Console]::Error.WriteLine('Compare requires -BaselineFile pointing at a JSON file produced by -Action Baseline.')
+    exit 3
+}
+
 switch ($Action) {
     'Scan' {
         Invoke-BlumScan -ScanRoot $resolvedPath
@@ -1500,6 +1720,12 @@ switch ($Action) {
     }
     'Remediate' {
         Invoke-BlumRemediate -ScanRoot $resolvedPath
+    }
+    'Baseline' {
+        Invoke-BlumBaseline -ScanRoot $resolvedPath -EvidenceDir $OutputDir
+    }
+    'Compare' {
+        Invoke-BlumCompare -ScanRoot $resolvedPath -BaselineFilePath $BaselineFile
     }
     'All' {
         Invoke-BlumScan -ScanRoot $resolvedPath

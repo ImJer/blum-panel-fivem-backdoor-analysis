@@ -82,6 +82,8 @@ A successful run of `detection/scan.sh` or `detection/blum_windows.ps1 -Action S
 
 Full rotation and rebuild guidance, including a flat credential-rotation checklist by category and notes on Discord tokens, Steam ssfn files, OAuth refresh tokens, and SSH agent forwarding: **[`docs/BLAST_RADIUS.md`](docs/BLAST_RADIUS.md)**.
 
+For the txAdmin tampering points specifically: **[`docs/TXADMIN_TAMPERING.md`](docs/TXADMIN_TAMPERING.md)**. For preventive hardening so this doesn't happen again: **[`docs/HARDENING.md`](docs/HARDENING.md)**.
+
 ---
 
 ## Table of Contents
@@ -705,7 +707,9 @@ Single-file PowerShell tool for Windows Server 2019 / Windows PowerShell 5.1: `d
 | `Forensics` | Timestamped IR snapshot (running processes with command lines, TCP connections with PID + process name, hosts file, recent Security/System/PowerShell event log windows, optional SHA256 hash baseline of all `.js`/`.lua`, txAdmin config copy, optional zip) | Writes only into the evidence directory |
 | `Block` | Hosts file + Windows Defender Firewall outbound rules for known C2 domains and direct IPs. `-Undo` removes the firewall rules created by this script. | Only with `-Apply` or `-Undo` |
 | `Remediate` | Quarantine high/medium-confidence malicious files (moves into a timestamped `_blum_quarantine_*` directory, never deletes), clean infected `fxmanifest.lua` lines, detect (and warn about) txAdmin tampering. Never auto-restores files from the internet. | Only with `-Apply` |
-| `All` | Read-only triage trio: `Scan` + `Audit` + `Forensics`. `Block` and `Remediate` are intentionally NOT bundled — run them explicitly after reviewing results. | No |
+| `Baseline` | Hash every `.lua`/`.js` under the scan path and write a JSON manifest (size + SHA256). Use after a known-clean install as a reference for later drift detection. | Writes one JSON file |
+| `Compare` | Diff the current state against a baseline file produced by `-Action Baseline`. Reports modified, added, and removed files. Detects tampering of *any* resource regardless of marker rotation. | No |
+| `All` | Read-only triage trio: `Scan` + `Audit` + `Forensics`. `Block`, `Remediate`, `Baseline`, and `Compare` are intentionally NOT bundled — run them explicitly. | No |
 
 **Triage a live server (read-only, safe to run on production):**
 
@@ -749,6 +753,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\detection\blum_windows.ps1
 ```
 
 `-JsonOut` writes UTF-8 without a BOM so strict JSON parsers (`jq`, Python, Node) consume it directly. Omit `-JsonOut` to emit JSON on stdout instead.
+
+**Resource integrity baseline + drift detection:**
+
+```powershell
+# After a known-clean install, capture the baseline:
+.\detection\blum_windows.ps1 -Action Baseline -Path C:\FXServer\server-data -OutputDir .
+
+# Later, detect any drift (modified, added, or removed resource files):
+.\detection\blum_windows.ps1 -Action Compare -Path C:\FXServer\server-data `
+    -BaselineFile .\baseline-20260505-120000.json
+```
+
+Linux operators have the same workflow via `detection/baseline.sh` and `detection/compare.sh`. Drift detection catches resource tampering regardless of what marker strings the malware uses, so it remains effective even if the family rotates IOCs. See [`docs/HARDENING.md`](docs/HARDENING.md) for how to integrate this into a regular operations cadence.
 
 **Exit codes**
 
@@ -858,6 +875,20 @@ grep -rn "1470175544682217685\|pe8DNcnZCjKPlKF24tk72R" --include="*.js" --includ
 Get-ChildItem -Recurse -Include '*.js','*.lua' | Select-String '1470175544682217685|pe8DNcnZCjKPlKF24tk72R'
 ```
 
+### Hardening — Defense in Depth
+
+Detection rots; hardening doesn't. Static IOC matching can be bypassed by renaming a marker, but the layered defenses below survive even if the malware family rotates every string they ship.
+
+The condensed playbook is:
+
+1. **Run FXServer as a non-admin / dedicated user** with no personal browser sessions on it. Closes the DPAPI credential-theft path described in [`docs/BLAST_RADIUS.md`](docs/BLAST_RADIUS.md).
+2. **Deploy [`dropper_trap/`](dropper_trap)** as the first `ensure` line in your `resources.cfg` (or rename the folder to `aaa_dropper_trap` so it sorts alphabetically first). It's a FiveM-side runtime trap that hooks `os.execute`, `io.popen`, `load`, file writes to txAdmin monitor files, and known C2 domain HTTPS calls — *behavioral* defenses that don't depend on us recognising the specific malware variant.
+3. **Egress-allowlist FXServer.** Limit FXServer's outbound traffic to known-good destinations only (Cfx CDN, your DB, your Discord webhooks). Cuts off C2 access for every Blum domain past, present, and future regardless of whether you've added it to the blocklist.
+4. **Take a baseline**, run `Compare` regularly. After a known-clean install, run `detection/baseline.sh` (Linux) or `blum_windows.ps1 -Action Baseline` (Windows) to capture SHA256 of every `.lua`/`.js`. Any subsequent drift on a file you didn't intentionally change is suspicious — review it. Catches tampering regardless of marker rotation.
+5. **Code-review every new resource** before adding it to `resources.cfg`. The vector is almost always an operator pulling a "free" script from a leak forum.
+
+The full playbook with each layer's rationale, OS-specific commands, and trade-offs is at [`docs/HARDENING.md`](docs/HARDENING.md).
+
 ### Remediation Checklist
 
 1. Run `detection/scan.sh` (Linux) or `detection/blum_windows.ps1 -Action Scan` (Windows) from server root
@@ -876,9 +907,14 @@ Get-ChildItem -Recurse -Include '*.js','*.lua' | Select-String '1470175544682217
 |------|-------------|
 | `detection/scan.sh` | 13-check Linux scanner (v4, includes Luraph) |
 | `detection/block_c2.sh` | Linux network blocker (REJECT rules, CDN-safe) |
-| `detection/blum_windows.ps1` | Windows Server 2019 / PowerShell 5.1 all-in-one: scan, audit, forensics, block, remediate |
+| `detection/baseline.sh` / `detection/compare.sh` | Linux SHA256 baseline + drift detection (rotation-resistant) |
+| `detection/blum_windows.ps1` | Windows Server 2019 / PowerShell 5.1 all-in-one: scan, audit, forensics, block, remediate, baseline, compare |
 | `detection/c2_probe.js` | Socket.IO passive C2 probe |
-| `dropper_trap/` | FiveM runtime protection hooks |
+| `dropper_trap/` | FiveM runtime trap (v4) — behavioral hooks for `os.execute`, `io.popen`, txAdmin file tampering, known C2 traffic; shadow-registers backdoor net events |
+| `iocs/blum_iocs.json` | Canonical structured IOC inventory consumed by every scanner and the runtime trap |
+| `docs/BLAST_RADIUS.md` | Scope-of-compromise guide by environment (post-incident response) |
+| `docs/TXADMIN_TAMPERING.md` | Walkthrough of the five txAdmin tampering points and the recommended reinstall procedure |
+| `docs/HARDENING.md` | Defense-in-depth playbook (least-privilege user, egress allowlist, runtime trap, baseline integrity) |
 | `evidence/panel_viewer.html` | Live investigation dashboard |
 
 ---
@@ -910,11 +946,18 @@ blum-panel-fivem-backdoor-analysis/
 +-- detection/
 |   +-- scan.sh                                      Linux scanner (v4, 13 checks, Luraph)
 |   +-- block_c2.sh                                  Linux C2 blocker (origin IP + all domains)
-|   +-- blum_windows.ps1                             Windows all-in-one (scan/audit/forensics/block/remediate)
+|   +-- baseline.sh                                  Linux SHA256 baseline writer
+|   +-- compare.sh                                   Linux baseline drift comparator
+|   +-- blum_windows.ps1                             Windows all-in-one (scan/audit/forensics/block/remediate/baseline/compare)
 |   +-- c2_probe.js                                  Socket.IO C2 probe (targets 9ns1.com)
 |   +-- enumerate_servers.sh                         Server enumeration tool
 |   +-- blum_probe_v2.sh                             Infrastructure recon v2
 |   +-- blum_probe_v3.sh                             Infrastructure recon v3
+|
++-- docs/
+|   +-- BLAST_RADIUS.md                              Scope-of-compromise guide by environment
+|   +-- TXADMIN_TAMPERING.md                         txAdmin five-tampering-points walkthrough
+|   +-- HARDENING.md                                 Defense-in-depth playbook
 |
 +-- dropper_trap/
 |   +-- fxmanifest.lua                               FiveM manifest
@@ -936,15 +979,23 @@ blum-panel-fivem-backdoor-analysis/
 |   +-- ext_bert_DEOBFUSCATED.js                     /ext/bert dropper deobfuscated
 |
 +-- iocs/
-    +-- domains.txt                                  30+ C2 domains (deduplicated)
-    +-- hosts_block.txt                              /etc/hosts blocklist (all domains)
-    +-- pihole_block.txt                             Pi-hole blocklist
-    +-- pastebin_urls.txt                            Pastebin fallback URLs
-    +-- strings.txt                                  70+ detection signatures
-    +-- hashes.txt                                   Payload file hashes (MD5)
-    +-- socket_io_protocol.md                        C2 protocol summary (162 lines)
-    +-- socket_io_protocol_full.js                   C2 protocol COMPLETE (870 lines)
-    +-- attacker_intel.md                            Identity, wallets, origin IP
+|   +-- README.md                                    Canonical IOC source documentation
+|   +-- blum_iocs.json                               STRUCTURED CANONICAL IOC INVENTORY (consumed by every tool)
+|   +-- domains.txt                                  30+ C2 domains (deduplicated)
+|   +-- hosts_block.txt                              /etc/hosts blocklist (all domains)
+|   +-- pihole_block.txt                             Pi-hole blocklist
+|   +-- pastebin_urls.txt                            Pastebin fallback URLs
+|   +-- strings.txt                                  70+ detection signatures
+|   +-- hashes.txt                                   Payload file hashes (MD5)
+|   +-- socket_io_protocol.md                        C2 protocol summary (162 lines)
+|   +-- socket_io_protocol_full.js                   C2 protocol COMPLETE (870 lines)
+|   +-- attacker_intel.md                            Identity, wallets, origin IP
+|
++-- .github/
+    +-- ISSUE_TEMPLATE/
+        +-- new-ioc.md                               Structured form for reporting new markers
+        +-- scanner-findings.md                      "Can someone take a look?" template
+        +-- config.yml                               Issue creation links to docs
 ```
 
 ---

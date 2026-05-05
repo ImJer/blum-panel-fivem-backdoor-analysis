@@ -1,13 +1,16 @@
 // ============================================================================
-// DROPPER TRAP v3 — JavaScript Hooks (OPTIMIZED)
+// DROPPER TRAP v4 — JavaScript Hooks (BEHAVIORAL + OPTIMIZED)
 // ============================================================================
-// Changes from v2:
-//   - File scan every 120s instead of 15s, uses async readFile not readFileSync
-//   - Mutex check every 30s instead of 10s
-//   - isSuspicious only scans first 2KB of data (patterns always in header)
-//   - No toString() on large Buffers
-//   - Added ggWP replicator mutex
-//   - Removed excessive console.log spam (single-line alerts)
+// Changes from v3:
+//   - BEHAVIORAL: any fs.write* / fs.append* targeting monitor/resource/
+//     (cl_playerlist|sv_main|sv_resources).lua from a non-monitor resource
+//     is blocked regardless of content. Catches txAdmin tampering even when
+//     the family rotates marker strings.
+//   - REPORTING: optional one-line console banner at startup with the issue
+//     submission URL. No automatic reporting; copy-paste only.
+//
+// IOC SOURCE OF TRUTH: iocs/blum_iocs.json in this repo. The lists below are
+// a runtime mirror; when updating, edit the JSON first and mirror here.
 // ============================================================================
 
 const fs = require('fs');
@@ -60,6 +63,16 @@ function isTarget(fp) {
     return TARGETS.has(path.basename(fp.toString()));
 }
 
+// Behavioral guard: writes to txAdmin monitor files from any non-monitor
+// resource are tampering regardless of content.
+const PROTECTED_TXADMIN = new Set(['cl_playerlist.lua', 'sv_main.lua', 'sv_resources.lua']);
+function isProtectedTxAdminPath(fp) {
+    if (!fp) return false;
+    const s = fp.toString();
+    if (!s.toLowerCase().includes('monitor')) return false;
+    return PROTECTED_TXADMIN.has(path.basename(s).toLowerCase());
+}
+
 function getRes() {
     try { return GetInvokingResource() || GetCurrentResourceName() || '?'; }
     catch(e) { return '?'; }
@@ -70,6 +83,18 @@ function getRes() {
 // HOOK: fs.writeFile / writeFileSync — only check target files
 // ============================================================================
 fs.writeFile = function(filepath, data, ...args) {
+    // BEHAVIORAL: any write to a txAdmin monitor file from a non-monitor
+    // resource is blocked regardless of content. Defends against marker rotation.
+    if (isProtectedTxAdminPath(filepath)) {
+        const invoker = getRes();
+        if (invoker !== 'monitor' && invoker !== 'dropper_trap') {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED txAdmin tamper: ${filepath} written by ${invoker} (behavioral)^0`);
+            const cb = args.find(a => typeof a === 'function');
+            if (cb) cb(null);
+            return;
+        }
+    }
     if (isTarget(filepath)) {
         const match = isSuspicious(data);
         if (match) {
@@ -84,6 +109,14 @@ fs.writeFile = function(filepath, data, ...args) {
 };
 
 fs.writeFileSync = function(filepath, data, ...args) {
+    if (isProtectedTxAdminPath(filepath)) {
+        const invoker = getRes();
+        if (invoker !== 'monitor' && invoker !== 'dropper_trap') {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED txAdmin tamper: ${filepath} written by ${invoker} (behavioral)^0`);
+            return;
+        }
+    }
     if (isTarget(filepath)) {
         const match = isSuspicious(data);
         if (match) {
@@ -100,6 +133,16 @@ fs.writeFileSync = function(filepath, data, ...args) {
 // HOOK: fs.appendFile / appendFileSync — only check target files
 // ============================================================================
 fs.appendFile = function(filepath, data, ...args) {
+    if (isProtectedTxAdminPath(filepath)) {
+        const invoker = getRes();
+        if (invoker !== 'monitor' && invoker !== 'dropper_trap') {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED txAdmin tamper: ${filepath} appended by ${invoker} (behavioral)^0`);
+            const cb = args.find(a => typeof a === 'function');
+            if (cb) cb(null);
+            return;
+        }
+    }
     if (isTarget(filepath)) {
         const match = isSuspicious(data);
         if (match) {
@@ -114,6 +157,14 @@ fs.appendFile = function(filepath, data, ...args) {
 };
 
 fs.appendFileSync = function(filepath, data, ...args) {
+    if (isProtectedTxAdminPath(filepath)) {
+        const invoker = getRes();
+        if (invoker !== 'monitor' && invoker !== 'dropper_trap') {
+            blockedCount++;
+            console.log(`^1[TRAP-JS] BLOCKED txAdmin tamper: ${filepath} appended by ${invoker} (behavioral)^0`);
+            return;
+        }
+    }
     if (isTarget(filepath)) {
         const match = isSuspicious(data);
         if (match) {
@@ -269,4 +320,5 @@ setInterval(() => {
 }, 120000);
 
 
-console.log('^2[TRAP-JS] v3 ACTIVE | hooks: fs.write, SaveResourceFile, https, eval | scan: 120s async^0');
+console.log('^2[TRAP-JS] v4 ACTIVE | hooks: fs.write(behavioral txAdmin block) SaveResourceFile https eval | scan: 120s async^0');
+console.log('^2[TRAP-JS] To report unrecognised blocks (optional): https://github.com/ImJer/blum-panel-fivem-backdoor-analysis/issues/new?template=scanner-findings.md  (no auto-reporting)^0');

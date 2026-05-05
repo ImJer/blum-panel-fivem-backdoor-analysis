@@ -314,4 +314,23 @@ The annotated, deobfuscated source for each tampering point is published in this
 - `deobfuscated/BLUM_TXADMIN_THEFT_PAYLOAD.lua` — full credential-theft Lua payload
 - `deobfuscated/c2_payload.js` (lines around the `CLIENT_BACKDOOR_LUA` definition) — the JS that performs the injection and stores the marker check
 
-If you find new markers or new tampering points not listed here, please open an issue. The attacker family rotates strings periodically; community signal is the fastest way to keep this doc current.
+If you find new markers or new tampering points not listed here, please open an issue using the [New IOC Report template](../../../issues/new?template=new-ioc.md) or the [Scanner Findings template](../../../issues/new?template=scanner-findings.md). The attacker family rotates strings periodically; community signal is the fastest way to keep this doc current.
+
+## Runtime defense (during and after cleanup)
+
+`dropper_trap/` (deployed as a FiveM resource and loaded *first* in your `resources.cfg`) provides runtime defenses that catch new variants of the txAdmin tampering pattern even when marker strings change:
+
+- **Behavioral file-write block.** Any write to `monitor/resource/cl_playerlist.lua`, `sv_main.lua`, or `sv_resources.lua` from a resource other than `monitor` itself is blocked, regardless of what the malicious content looks like.
+- **Shadow-registered backdoor events.** `onServerResourceFail`, `txadmin:js_create`, and `helpEmptyCode` are pre-registered with handlers that `CancelEvent()` immediately — so even if the family ships a variant with the same event names, the malicious handler can't run.
+- **Manifest watcher.** Every resource's `fxmanifest.lua` is hashed at first sight; runtime changes are reported. Catches manifest-injection attacks.
+
+Deploy `dropper_trap/` always, not just after an incident. See [`docs/HARDENING.md`](HARDENING.md) for the full defense-in-depth playbook.
+
+---
+
+## See also
+
+- [`docs/BLAST_RADIUS.md`](BLAST_RADIUS.md) — what to rotate and rebuild after this kind of compromise (depends on whether FXServer ran in a container, on a Linux host, or directly on Windows)
+- [`docs/HARDENING.md`](HARDENING.md) — defense-in-depth playbook to avoid the next infection
+- [`dropper_trap/`](../dropper_trap) — FiveM-side runtime trap with behavioral defenses against this family
+- [`iocs/blum_iocs.json`](../iocs/blum_iocs.json) — canonical IOC inventory; the txAdmin tampering markers list lives in the `txadmin_tampering` section

@@ -1,0 +1,211 @@
+{
+  "format_version": "1",
+  "iocs_version": "2026.05.05",
+  "source": "https://github.com/ImJer/blum-panel-fivem-backdoor-analysis",
+  "description": "Canonical IOC inventory for the Blum Panel / Warden Panel / Cipher Panel / GFX Panel FiveM backdoor family. All scanners and runtime traps in this repository should derive their IOC lists from this file. To update an IOC, edit this file AND the inline copies in detection/scan.sh, detection/blum_windows.ps1, dropper_trap/trap.lua, and dropper_trap/trap.js. See iocs/README.md for the maintenance workflow.",
+
+  "c2_domains": [
+    "0xchitado.com",
+    "2312321321321213.com",
+    "2nit32.com",
+    "2ns3.net",
+    "5mscripts.net",
+    "9ns1.com",
+    "bhlool.com",
+    "blum-panel.com",
+    "blum-panel.me",
+    "bybonvieux.com",
+    "cipher-panel.me",
+    "ciphercheats.com",
+    "dark-utilities.xyz",
+    "fivemgtax.com",
+    "fivems.lt",
+    "flowleakz.org",
+    "gfxpanel.org",
+    "giithub.net",
+    "iwantaticket.org",
+    "jking.lt",
+    "keyx.club",
+    "kutingplays.com",
+    "l00x.org",
+    "monloox.com",
+    "noanimeisgay.com",
+    "ryenz.net",
+    "spacedev.fr",
+    "trezz.org",
+    "useer.it.com",
+    "warden-panel.me",
+    "wsichkidolu.com",
+    "z1lly.org"
+  ],
+
+  "direct_ips": [
+    {
+      "ip": "185.87.23.198",
+      "role": "Origin C2 backend (Socket.IO + REST)",
+      "location": "Hamburg, DE",
+      "asn": "active 1 GmbH",
+      "port_observed": 5000
+    },
+    {
+      "ip": "185.80.128.35",
+      "role": "Stolen resource file hosting",
+      "location": "Vilnius, LT",
+      "asn": "UAB Esnet"
+    },
+    {
+      "ip": "185.80.128.36",
+      "role": "Staging / spare server",
+      "location": "Vilnius, LT",
+      "asn": "UAB Esnet"
+    },
+    {
+      "ip": "185.80.130.168",
+      "role": "GFX Panel C2",
+      "location": "Vilnius, LT",
+      "asn": "UAB Esnet",
+      "port_observed": 3000
+    }
+  ],
+
+  "attacker_handles": [
+    "bertjj",
+    "bertjjcfxre",
+    "bertjjgg",
+    "miauss",
+    "miausas"
+  ],
+
+  "panel_brands": [
+    "blum-panel",
+    "cipher-panel",
+    "gfxpanel",
+    "warden-panel"
+  ],
+
+  "operator_constants": [
+    "VB8mdVjrzd",
+    "ggWP"
+  ],
+
+  "globalstate_mutexes": [
+    "ggWP",
+    "miausas",
+    "miauss"
+  ],
+
+  "txadmin_tampering": {
+    "description": "Five separate tampering points. The three monitor-file injections live in different files and are NOT a single event name. Manual surgery is unreliable for sv_main.lua because the injection is inline; reinstall txAdmin from a release matching the installed version. See docs/TXADMIN_TAMPERING.md.",
+    "monitor_files": [
+      {
+        "file_basename": "cl_playerlist.lua",
+        "path_hint": "monitor/resource/cl_playerlist.lua",
+        "marker": "helpEmptyCode",
+        "kind": "client_rce",
+        "removable_by_hand": true,
+        "injection_style": "appended block at end of file"
+      },
+      {
+        "file_basename": "sv_main.lua",
+        "path_hint": "monitor/resource/sv_main.lua",
+        "markers": ["RESOURCE_EXCLUDE", "isExcludedResource"],
+        "kind": "resource_cloaking",
+        "removable_by_hand": false,
+        "injection_style": "inline modification of existing function (txaReportResources)"
+      },
+      {
+        "file_basename": "sv_resources.lua",
+        "path_hint": "monitor/resource/sv_resources.lua",
+        "marker": "onServerResourceFail",
+        "kind": "server_rce",
+        "removable_by_hand": true,
+        "injection_style": "appended RegisterNetEvent + load() block"
+      }
+    ],
+    "all_markers": [
+      "helpEmptyCode",
+      "isExcludedResource",
+      "JohnsUrUncle",
+      "onServerResourceFail",
+      "RESOURCE_EXCLUDE",
+      "txadmin:js_create"
+    ],
+    "backdoor_admin_names": [
+      "JohnsUrUncle"
+    ],
+    "backdoor_event_names": [
+      "helpEmptyCode",
+      "onServerResourceFail",
+      "txadmin:js_create"
+    ]
+  },
+
+  "dropper_filenames": [
+    "babel_config.js",
+    "babel_preset.js",
+    "build_cache.js",
+    "cache_old.js",
+    "env_backup.js",
+    "eslint_rc.js",
+    "helper_functions.js",
+    "hook_system.js",
+    "jest_mock.js",
+    "jest_setup.js",
+    "latest_utils.js",
+    "mock_data.js",
+    "patch_update.js",
+    "queue_handler.js",
+    "runtime_module.js",
+    "session_store.js",
+    "stable_core.js",
+    "sync_worker.js",
+    "test_utils.js",
+    "utils_lib.js",
+    "vite_plugin.js",
+    "vite_temp.js",
+    "webpack_bundle.js"
+  ],
+
+  "obfuscation_residue": [
+    "aga[0x",
+    "decompressFromUTF16",
+    "Luraph Obfuscator",
+    "UARZT6[",
+    "\\u15E1"
+  ],
+
+  "loader_strings": [
+    "installed_notices",
+    "vm').runInThisContext"
+  ],
+
+  "jj_suffix_keys": [
+    "anonJJ",
+    "blumJJ",
+    "cityJJ",
+    "devJJ",
+    "gangJJ",
+    "mafiaJJ",
+    "miaussJJ",
+    "nullJJ",
+    "panelJJ",
+    "roleplayJJ",
+    "zXeAHJJ"
+  ],
+
+  "discord_webhook_ids": [
+    "1470175544682217685",
+    "pe8DNcnZCjKPlKF24tk72R"
+  ],
+
+  "xor_dropper_pattern_regex": "String\\.fromCharCode\\s*\\(\\s*[A-Za-z0-9_$]+\\s*\\[\\s*[A-Za-z0-9_$]+\\s*\\]\\s*\\^\\s*[A-Za-z0-9_$]+\\s*\\)",
+
+  "manifest_suspicious_path_regex": "(?i)(node_modules[\\\\/]\\.|\\.cache[\\\\/]|middleware[\\\\/]|dist[\\\\/].*\\.js|babel_config|jest_mock|mock_data|webpack_bundle|env_backup|cache_old|build_cache|vite_temp|eslint_rc|jest_setup|sync_worker|hook_system|patch_update)",
+
+  "payload_size_ranges": [
+    {"label": "JScrambler dropper payload",       "extension": ".js",  "min_kb": 420,  "max_kb": 470},
+    {"label": "live C2 replicator payload",       "extension": ".js",  "min_kb": 1600, "max_kb": 1650},
+    {"label": "XOR yarn/webpack dropper variant", "extension": ".js",  "min_kb": 40,   "max_kb": 46},
+    {"label": "Luraph Lua payload",               "extension": ".lua", "min_kb": 60,   "max_kb": 67}
+  ]
+}

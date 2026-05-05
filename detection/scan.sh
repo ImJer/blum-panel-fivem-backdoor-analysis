@@ -230,3 +230,47 @@ else
 fi
 echo "============================================"
 echo ""
+
+# ----------------------------------------------------------------------------
+# OPTIONAL: copy-paste template for sharing findings with maintainers.
+# No automatic reporting — operators copy what they want into a new issue.
+# Only printed when something was found.
+# ----------------------------------------------------------------------------
+if [ "$FOUND" -gt 0 ]; then
+    echo "============================================"
+    echo " OPTIONAL: SHARE FINDINGS WITH MAINTAINERS"
+    echo "============================================"
+    echo "No automatic reporting. If you want a second pair of eyes on"
+    echo "these findings, copy the block between BEGIN/END COPY-PASTE"
+    echo "TEMPLATE below and open an issue at:"
+    echo "  https://github.com/ImJer/blum-panel-fivem-backdoor-analysis/issues/new?template=scanner-findings.md"
+    echo ""
+    echo "--- BEGIN COPY-PASTE TEMPLATE ---"
+    echo "## Which tool surfaced the findings?"
+    echo ""
+    echo "- [x] \`detection/scan.sh\` (Linux)"
+    echo ""
+    echo "## Scanner output"
+    echo ""
+    echo '```'
+    echo "BLUM PANEL MALWARE SCANNER v4"
+    echo "Indicators found: $FOUND"
+    echo "Scan path: $SCAN_DIR"
+    echo "Date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u)"
+    echo '```'
+    echo ""
+    echo "(Paste the [FOUND] / INFECTED / SUSPICIOUS lines from your scan output above this comment if you'd like maintainers to look at the specific markers.)"
+    echo ""
+    echo "## Environment"
+    echo ""
+    echo "- OS: $(uname -srv 2>/dev/null || uname -a)"
+    echo "- Scanner: scan.sh v4"
+    echo ""
+    echo "## Where is FXServer running?"
+    echo ""
+    echo "<!-- replace with your environment: Pterodactyl/Docker container, Linux host (FXServer as user X), or other -->"
+    echo "--- END COPY-PASTE TEMPLATE ---"
+    echo ""
+    echo "Tip: see docs/BLAST_RADIUS.md before assuming a scrub is enough."
+    echo ""
+fi

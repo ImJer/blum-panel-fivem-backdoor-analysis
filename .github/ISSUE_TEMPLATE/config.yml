@@ -1,0 +1,17 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "I think my server is infected — what do I do?"
+    url: https://github.com/ImJer/blum-panel-fivem-backdoor-analysis#%EF%B8%8F-read-this-if-your-scanner-reports-findings
+    about: Start with the scope-of-compromise matrix and the BLAST_RADIUS doc.
+  - name: "I found txAdmin tampering and want to know how to clean it"
+    url: https://github.com/ImJer/blum-panel-fivem-backdoor-analysis/blob/main/docs/TXADMIN_TAMPERING.md
+    about: Walkthrough of the five tampering points and the recommended reinstall procedure.
+  - name: "How do I harden my server against the next infection?"
+    url: https://github.com/ImJer/blum-panel-fivem-backdoor-analysis/blob/main/docs/HARDENING.md
+    about: Defense-in-depth playbook (least-privilege user, egress allowlists, runtime trap, baseline integrity).
+  - name: "Existing pinned notice"
+    url: https://github.com/ImJer/blum-panel-fivem-backdoor-analysis/issues/5
+    about: Scope-of-compromise notice. Read this before assuming a scrub is enough.
+  - name: "FiveM Cfx.re abuse / report"
+    url: https://forum.cfx.re/
+    about: For active operators of malicious resources or panel infrastructure, report to Cfx.re directly through their forum.
